@@ -12,6 +12,8 @@ bl_info = {
 
 import bpy
 import os
+import textwrap
+import re
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty
 from bpy.utils import previews
@@ -262,94 +264,12 @@ class VVTools_OT_ReloadTexturesOfSelected(Operator):
         reload_textures(selected_objects)
         return {"FINISHED"}
 
-
 # VRC Analysis of Selected
 ## Analysis tool for VRchat avatars. Takes the selected objects and returns an estimate of it's performance ranking. 
-### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently is limited to Poor or below. 
+### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently is limited to Poor or below.
 
-def analyze_selected_objects():
-    import bpy
-
-    statistics = {
-        'polygons': 0,
-        'texture_memory': 0,
-        'skinned_meshes': 0,
-        'meshes': 0,
-        'material_slots': 0,
-        'bones': 0,
-    }
-
-    # Iterate through selected objects
-    for obj in bpy.context.selected_objects:
-        if obj.type == 'MESH':
-            statistics['polygons'] += len(obj.data.polygons)
-            statistics['material_slots'] += len(obj.material_slots)
-
-            if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
-                statistics['skinned_meshes'] += 1
-            else:
-                statistics['meshes'] += 1
-
-            # Estimate texture memory
-            for mat_slot in obj.material_slots:
-                if mat_slot.material:
-                    for node in mat_slot.material.node_tree.nodes:
-                        if node.type == "TEX_IMAGE":
-                            img = node.image
-                            if img:
-                                statistics['texture_memory'] += img.size[0] * img.size[1] * 4
-                                
-        elif obj.type == 'ARMATURE':
-            statistics['bones'] += len(obj.data.bones)
-
-    return statistics
-
-def analyze_selected_objects():
-    import bpy
-
-    statistics = {
-        'polygons': 0,
-        'texture_memory': 0,
-        'skinned_meshes': 0,
-        'meshes': 0,
-        'material_slots': 0,
-        'bones': 0,
-    }
-
-    # Iterate through selected objects
-    for obj in bpy.context.selected_objects:
-        if obj.type == 'MESH':
-            statistics['polygons'] += len(obj.data.polygons)
-            statistics['material_slots'] += len(obj.material_slots)
-
-            if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
-                statistics['skinned_meshes'] += 1
-            else:
-                statistics['meshes'] += 1
-
-            # Estimate texture memory
-            for mat_slot in obj.material_slots:
-                if mat_slot.material:
-                    for node in mat_slot.material.node_tree.nodes:
-                        if node.type == "TEX_IMAGE":
-                            img = node.image
-                            if img:
-                                statistics['texture_memory'] += img.size[0] * img.size[1] * 4
-                                
-        elif obj.type == 'ARMATURE':
-            statistics['bones'] += len(obj.data.bones)
-
-    return statistics
-
-class VVTools_OT_VRCAnalyse(Operator):
-    bl_idname = "vv_tools.vrc_analyse"
-    bl_label = "VRC Analyse"
-    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
-
-    def execute(self, context):
-        result = analyze_selected_objects()
-        context.scene["VRC_Analysis_Results"] = result
-        return {"FINISHED"}
+import bpy
+from bpy.types import Operator, Panel
 
 def performance_rank(statistics):
     ranks = [
@@ -367,6 +287,78 @@ def performance_rank(statistics):
                 rank_index = max(rank_index, i + 1)
     
     return ranks[rank_index][0]
+
+def performance_warning(statistics):
+    warnings = []
+
+    if statistics['polygons'] > 70000:
+        warnings.append("Polygon count is high. Consider dissolving unnecessary geometry, decimation, or removing unnecessary geometry entirely.")
+
+    if statistics['texture_memory'] > 150 * 1024 * 1024:
+        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, bear in mind Unity will downres these to 2K on import.")
+
+    if statistics['skinned_meshes'] > 16:
+        warnings.append("Skinned Mesh count is high. Consider merging skinned meshes as appropriate, or offloading things like outfit changes to a different avatar entirely.")
+        
+    if statistics['meshes'] > 24:
+        warnings.append("Meshes count is high. It is questionable why you need so many meshes, and you should consider merging them as appropriate, or removing them as appropriate.")
+
+    if statistics['material_slots'] > 32:
+        warnings.append("Material Count is very high. Check for duplicate entries, unused material slots, and atlas textures if required. If you can merge two meshes that share the exact same material, this stat will effectively be lowered.")
+
+    if statistics['bones'] > 400:
+        warnings.append("Bones count is very high. Check for duplicate or unused armatures, _end bones (leaf bones), zero weight bones and remove them as needed.")
+
+    return warnings
+
+def analyze_selected_objects():
+    statistics = {
+        'polygons': 0,
+        'texture_memory': 0,
+        'skinned_meshes': 0,
+        'meshes': 0,
+        'material_slots': 0,
+        'bones': 0,
+    }
+
+    texture_memory_usage = {}
+    
+    # Iterate through selected objects
+    for obj in bpy.context.selected_objects:
+        if obj.type == 'MESH':
+            statistics['polygons'] += len(obj.data.polygons)
+            statistics['material_slots'] += len(obj.material_slots)
+
+            if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
+                statistics['skinned_meshes'] += 1
+            else:
+                statistics['meshes'] += 1
+
+            # Estimate texture memory
+            for mat_slot in obj.material_slots:
+                if mat_slot.material:
+                    for node in mat_slot.material.node_tree.nodes:
+                        if node.type == "TEX_IMAGE":
+                            img = node.image
+                            if img:
+                                if img not in texture_memory_usage:
+                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4
+                                    
+        elif obj.type == 'ARMATURE':
+            statistics['bones'] += len(obj.data.bones)
+    
+    statistics['texture_memory'] = sum(texture_memory_usage.values())
+    return statistics
+
+class VVTools_OT_VRCAnalyse(Operator):
+    bl_idname = "vv_tools.vrc_analyse"
+    bl_label = "VRC Analyse"
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def execute(self, context):
+        result = analyze_selected_objects()
+        context.scene["VRC_Analysis_Results"] = result
+        return {"FINISHED"}
 
 # New functions can be added here. Keep this line for organisation haha
 
@@ -388,39 +380,38 @@ class VVTools_PT_Panel(Panel):
         layout.operator("vv_tools.reload_textures_of_selected")
 
 class VVTools_PT_VRCAnalysis(Panel):
-    bl_idname = "VVTools_PT_vrc_analysis"
     bl_label = "VV Tools - VRC"
+    bl_idname = "VVTOOLS_PT_vrc_analysis"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "VV"
 
     def draw(self, context):
         layout = self.layout
+        results = context.scene.get("VRC_Analysis_Results")
+
+        if results:
+            layout.label(text=f"Polygons: {results['polygons']}/69999")
+            layout.label(text=f"Texture Memory: {results['texture_memory'] / (1024 * 1024):.2f} MB")
+            layout.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
+            layout.label(text=f"Meshes: {results['meshes']}")
+            layout.label(text=f"Material Slots: {results['material_slots']}")
+            layout.label(text=f"Bones: {results['bones']}")
+
+            layout.separator()
+            layout.label(text=f"Performance Rank: {performance_rank(results)}")
+            warnings = performance_warning(results)
+            for warning in warnings:
+                box = layout.box()
+                lines = re.split(r'(?<=\. |, )', warning)  # Split the text at both '. ' and ', '
+                for line in lines:
+                    if line:
+                        box.label(text=line)
+
+        else:
+            layout.label(text="No analysis data available")
 
         layout.operator("vv_tools.vrc_analyse")
-
-        results = context.scene.get("VRC_Analysis_Results", None)
-        if results:
-            row = layout.row()
-            row.label(text=f"Polygons: {results['polygons']}/69999")
-
-            row = layout.row()
-            row.label(text=f"Texture Memory: {results['texture_memory'] // (1024 * 1024)} MB")
-
-            row = layout.row()
-            row.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
-
-            row = layout.row()
-            row.label(text=f"Meshes: {results['meshes']}")
-
-            row = layout.row()
-            row.label(text=f"Material Slots: {results['material_slots']}")
-
-            row = layout.row()
-            row.label(text=f"Bones: {results['bones']}")
-
-            row = layout.row()
-            row.label(text=f"Performance Rank: {performance_rank(results)}")
 
 
 def register():
