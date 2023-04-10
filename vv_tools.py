@@ -1,12 +1,12 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 0),
+    "version": (0, 4, 1),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
-    "warning": "UNSTABLE! Documentation not yet live.",
-    "doc_url": "https://vianvolae.us/",
+    "warning": "Potentially unstable, documentation incomplete.",
+    "doc_url": "https://github.com/Vianvolaeus/VVtools",
     "category": "General",
 }
 
@@ -38,7 +38,7 @@ def unregister_icons():
     bpy.utils.previews.remove(icon_collection)
     icon_collection = None
 
-# Draw submenu and menu for header
+# Draw submenu and menu for header. New operators should be added here as well as class registry. 
 
 class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
     bl_label = "VV Tools Submenu"
@@ -49,6 +49,7 @@ class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.set_modifiers_visibility")
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.reload_textures_of_selected")
         #Add more operators here as required
 
 class TOPBAR_MT_custom_menu(bpy.types.Menu):
@@ -237,9 +238,33 @@ class VVTools_OT_MergeToActiveBone(Operator):
         return {"FINISHED"}
 
 
-# New functions can be added here. 
+# Selected Object Texture Reload
+## Refreshes linked textures for selected objects. Useful for external texture authoring (Substance)
+### WARNING! Can be slow!
 
-#Final side panel / register
+def reload_textures(objects):
+    for obj in objects:
+        for slot in obj.material_slots:
+            if slot.material:
+                for node in slot.material.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        node.image.reload()
+
+class VVTools_OT_ReloadTexturesOfSelected(Operator):
+    bl_idname = "vv_tools.reload_textures_of_selected"
+    bl_label = "Reload Textures of Selected"
+    bl_description = "Reload all textures of the selected objects. WARNING! Can run slow."
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        reload_textures(selected_objects)
+        return {"FINISHED"}
+
+
+# New functions can be added here. Keep this line for organisation haha
+
+#Final side panel, top menu / register classes
 
 class VVTools_PT_Panel(Panel):
     bl_idname = "VV_TOOLS_PT_panel"
@@ -254,6 +279,7 @@ class VVTools_PT_Panel(Panel):
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.set_modifiers_visibility")
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.reload_textures_of_selected")
 
 
 def register():
@@ -261,6 +287,7 @@ def register():
     bpy.utils.register_class(VVTools_OT_RenameDataBlocks)
     bpy.utils.register_class(VVTools_OT_SetModifiersVisibility)
     bpy.utils.register_class(VVTools_OT_MergeToActiveBone)
+    bpy.utils.register_class(VVTools_OT_ReloadTexturesOfSelected)
     bpy.utils.register_class(VVTools_PT_Panel)
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -272,6 +299,7 @@ def unregister():
     bpy.utils.unregister_class(VVTools_OT_RenameDataBlocks)
     bpy.utils.unregister_class(VVTools_OT_SetModifiersVisibility)
     bpy.utils.unregister_class(VVTools_OT_MergeToActiveBone)
+    bpy.utils.unregister_class(VVTools_OT_ReloadTexturesOfSelected)
     bpy.utils.unregister_class(VVTools_PT_Panel)
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_custom_menu.menu_draw)
     for cls in classes:
