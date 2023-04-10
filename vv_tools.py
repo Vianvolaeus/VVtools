@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 3),
+    "version": (0, 4, 5),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
