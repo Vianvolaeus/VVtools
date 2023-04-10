@@ -1,8 +1,9 @@
 # VVtools
 General Blender toolkit, for automating some short processes. 
+
 Addon should be currently be considered experimental, in progress, incomplete.
 
-
+![](https://github.com/Vianvolaeus/VVtools/blob/assets/vv_tools_header.jpg)
 
 ## Installation
 Download the latest release, and install th .py as usual (will replace this with quick visual, but it's like every other Blender addon lol). 
@@ -36,9 +37,3 @@ This is mainly used for cleanup for exporting assets etc. No more 'Cube.003', et
 ### Merge Bones to Active
 Pose Mode operator used to merge down / dissolve bones *with their weights* down to an active bone.
 This can be useful for reducing hair chains in characters, dissolving twist bones, things like that. 
-
-
-#WIP
-
-
- 
