@@ -14,7 +14,7 @@ Haven't tested versions except 3.0+, but *should* be 2.8+ compatible
 The addon currently lives in a top header menu, as well as the side panel. 
 Operators can also be called via the search function (F3) - using 'vv' in the search should bring everything up!
 
-## Operators
+## General Operators
 
 ### Visual Geo to Shape
 
@@ -37,3 +37,23 @@ This is mainly used for cleanup for exporting assets etc. No more 'Cube.003', et
 ### Merge Bones to Active
 Pose Mode operator used to merge down / dissolve bones *with their weights* down to an active bone.
 This can be useful for reducing hair chains in characters, dissolving twist bones, things like that. 
+
+### Reload Textures of Selected
+Will reload the textures of every currently selected object. Useful for external texture authorship (eg. Substance) - will refresh Image Texture nodes if they have been altered in the original directory. 
+
+## VRChat Operators
+
+### VRC Analyse
+A WIP analysis tool for VRChat avatars. It analyses the current selected objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
+Currently, this checks the following:
+
+- Polygons
+- Texture Memory
+- Skinned Meshes 
+- Meshes
+- Material Slots
+- Bones
+
+If something is pushing the selected objects into the Very Poor Performance Rank, the UI will attempt to report what it is, with a mild suggestion on a fix. 
+Currently some modifier interactions are analysed incorrectly, so some stats may be incorrect. 
+NOTE: Currently, the performance stats are hard-coded, so if there are updates to them, they could be incorrect if the code is not changed accordingly. 

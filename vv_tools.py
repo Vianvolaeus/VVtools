@@ -1,19 +1,21 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 0),
+    "version": (0, 4, 6),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
-    "warning": "UNSTABLE! Documentation not yet live.",
-    "doc_url": "https://vianvolae.us/",
+    "warning": "Potentially unstable, documentation incomplete.",
+    "doc_url": "https://github.com/Vianvolaeus/VVtools",
     "category": "General",
 }
 
 import bpy
 import os
+import textwrap
+import re
 from bpy.types import Panel, Operator, PropertyGroup
-from bpy.props import StringProperty, PointerProperty, BoolProperty
+from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
 
 icon_collection = None
@@ -38,7 +40,7 @@ def unregister_icons():
     bpy.utils.previews.remove(icon_collection)
     icon_collection = None
 
-# Draw submenu and menu for header
+# Draw submenu and menu for header. NEW OPERATORS SHOULD BE ADDED HERE AS WELL AS CLASS REGISTRY. 
 
 class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
     bl_label = "VV Tools Submenu"
@@ -49,6 +51,8 @@ class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.set_modifiers_visibility")
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.reload_textures_of_selected")
+        layout.operator("vv_tools.vrc_analyse")
         #Add more operators here as required
 
 class TOPBAR_MT_custom_menu(bpy.types.Menu):
@@ -237,13 +241,142 @@ class VVTools_OT_MergeToActiveBone(Operator):
         return {"FINISHED"}
 
 
-# New functions can be added here. 
+# Selected Object Texture Reload
+## Refreshes linked textures for selected objects. Useful for external texture authoring (Substance)
+### WARNING! Can be slow!
 
-#Final side panel / register
+def reload_textures(objects):
+    for obj in objects:
+        for slot in obj.material_slots:
+            if slot.material:
+                for node in slot.material.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        node.image.reload()
+
+class VVTools_OT_ReloadTexturesOfSelected(Operator):
+    bl_idname = "vv_tools.reload_textures_of_selected"
+    bl_label = "Reload Textures of Selected"
+    bl_description = "Reload all textures of the selected objects. WARNING! Can run slow."
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def execute(self, context):
+        selected_objects = context.selected_objects
+        reload_textures(selected_objects)
+        return {"FINISHED"}
+
+# VRC Analysis of Selected
+## Analysis tool for VRchat avatars. Takes the selected objects and returns an estimate of it's performance ranking. 
+### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently is limited to Poor or below.
+
+import bpy
+from bpy.types import Operator, Panel
+
+def performance_rank(statistics):
+    ranks = [
+        ('Excellent', {'polygons': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
+        ('Good', {'polygons': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
+        ('Medium', {'polygons': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
+        ('Poor', {'polygons': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
+        ('Very Poor', {}),
+    ]
+    
+    rank_index = 0
+    for key, value in statistics.items():
+        for i, (rank, limits) in enumerate(ranks[:-1]):
+            if value > limits[key]:
+                rank_index = max(rank_index, i + 1)
+    
+    return ranks[rank_index][0]
+
+def performance_warning(statistics):
+    warnings = []
+
+    if statistics['polygons'] > 70000:
+        warnings.append("Polygon count is high. Consider dissolving unnecessary geometry, decimation, or removing unnecessary geometry entirely.")
+
+    if statistics['texture_memory'] > 150 * 1024 * 1024:
+        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, bear in mind Unity will downres these to 2K on import.")
+
+    if statistics['skinned_meshes'] > 16:
+        warnings.append("Skinned Mesh count is high. Consider merging skinned meshes as appropriate, or offloading things like outfit changes to a different avatar entirely.")
+        
+    if statistics['meshes'] > 24:
+        warnings.append("Meshes count is high. It is questionable why you need so many meshes, and you should consider merging them as appropriate, or removing them as appropriate.")
+
+    if statistics['material_slots'] > 32:
+        warnings.append("Material Count is very high. Check for duplicate entries, unused material slots, and atlas textures if required. If you can merge two meshes that share the exact same material, this stat will effectively be lowered.")
+
+    if statistics['bones'] > 400:
+        warnings.append("Bones count is very high. Check for duplicate or unused armatures, _end bones (leaf bones), zero weight bones and remove them as needed.")
+
+    return warnings
+
+def analyze_selected_objects():
+    statistics = {
+        'polygons': 0,
+        'texture_memory': 0,
+        'skinned_meshes': 0,
+        'meshes': 0,
+        'material_slots': 0,
+        'bones': 0,
+    }
+
+    texture_memory_usage = {}
+    
+    # Iterate through selected objects
+    for obj in bpy.context.selected_objects:
+        if obj.type == 'MESH':
+            # Apply modifiers to a temporary mesh
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            temp_obj = obj.evaluated_get(depsgraph)
+            temp_mesh = bpy.data.meshes.new_from_object(temp_obj)
+            
+            statistics['polygons'] += len(temp_mesh.polygons)
+            bpy.data.meshes.remove(temp_mesh)
+            statistics['material_slots'] += len(obj.material_slots)
+
+            if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
+                statistics['skinned_meshes'] += 1
+            else:
+                statistics['meshes'] += 1
+
+            # Estimate texture memory
+            for mat_slot in obj.material_slots:
+                if mat_slot.material:
+                    for node in mat_slot.material.node_tree.nodes:
+                        if node.type == "TEX_IMAGE":
+                            img = node.image
+                            if img:
+                                if img not in texture_memory_usage:
+                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4
+                                    
+        elif obj.type == 'ARMATURE':
+            statistics['bones'] += len(obj.data.bones)
+    
+    statistics['texture_memory'] = sum(texture_memory_usage.values())
+    return statistics
+
+class VVTools_OT_VRCAnalyse(Operator):
+    bl_idname = "vv_tools.vrc_analyse"
+    bl_label = "VRC Analyse"
+    bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def execute(self, context):
+        result = analyze_selected_objects()
+        context.scene["VRC_Analysis_Results"] = result
+
+        # Redraw the area to update the panel
+        context.area.tag_redraw()
+
+        return {"FINISHED"}
+
+# New functions can be added here. Keep this line for organisation haha
+
+#Final side panel, top menu / register classes
 
 class VVTools_PT_Panel(Panel):
     bl_idname = "VV_TOOLS_PT_panel"
-    bl_label = "VV Tools"
+    bl_label = "VV Tools - General"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "VV"
@@ -254,6 +387,41 @@ class VVTools_PT_Panel(Panel):
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.set_modifiers_visibility")
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.reload_textures_of_selected")
+
+class VVTools_PT_VRCAnalysis(Panel):
+    bl_idname = "VV_TOOLS_PT_vrc_analysis"
+    bl_label = "VV Tools - VRC"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
+        results = context.scene.get("VRC_Analysis_Results")
+
+        if results:
+            layout.label(text=f"Polygons: {results['polygons']}/69999")
+            layout.label(text=f"Texture Memory: {results['texture_memory'] / (1024 * 1024):.2f} MB")
+            layout.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
+            layout.label(text=f"Meshes: {results['meshes']}")
+            layout.label(text=f"Material Slots: {results['material_slots']}")
+            layout.label(text=f"Bones: {results['bones']}")
+
+            layout.separator()
+            layout.label(text=f"Performance Rank: {performance_rank(results)}")
+            warnings = performance_warning(results)
+            for warning in warnings:
+                box = layout.box()
+                lines = re.split(r'(?<=\. |, )', warning)  # Split the text at both '. ' and ', '
+                for line in lines:
+                    if line:
+                        box.label(text=line)
+
+        else:
+            layout.label(text="No analysis data available")
+
+        layout.operator("vv_tools.vrc_analyse")
 
 
 def register():
@@ -261,6 +429,9 @@ def register():
     bpy.utils.register_class(VVTools_OT_RenameDataBlocks)
     bpy.utils.register_class(VVTools_OT_SetModifiersVisibility)
     bpy.utils.register_class(VVTools_OT_MergeToActiveBone)
+    bpy.utils.register_class(VVTools_OT_ReloadTexturesOfSelected)
+    bpy.utils.register_class(VVTools_OT_VRCAnalyse)
+    bpy.utils.register_class(VVTools_PT_VRCAnalysis)
     bpy.utils.register_class(VVTools_PT_Panel)
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -272,6 +443,9 @@ def unregister():
     bpy.utils.unregister_class(VVTools_OT_RenameDataBlocks)
     bpy.utils.unregister_class(VVTools_OT_SetModifiersVisibility)
     bpy.utils.unregister_class(VVTools_OT_MergeToActiveBone)
+    bpy.utils.unregister_class(VVTools_OT_ReloadTexturesOfSelected)
+    bpy.utils.unregister_class(VVTools_OT_VRCAnalyse)
+    bpy.utils.unregister_class(VVTools_PT_VRCAnalysis)
     bpy.utils.unregister_class(VVTools_PT_Panel)
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_custom_menu.menu_draw)
     for cls in classes:
