@@ -3,7 +3,7 @@ General Blender toolkit, for automating some short processes.
 Addon should be currently be considered experimental, in progress, incomplete.
 
 ## Installation
-Download the latest release, and install as usual (will replace this with quick visual, but it's like every other Blender addon lol). 
+Download the latest release, and install th .py as usual (will replace this with quick visual, but it's like every other Blender addon lol). 
 Haven't tested versions except 3.0+, but *should* be 2.8+ compatible
 
 ## Usage 
