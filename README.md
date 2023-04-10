@@ -44,7 +44,7 @@ Will reload the textures of every currently selected object. Useful for external
 ## VRChat Operators
 
 ### VRC Analyse
-An analysis tool for VRChat avatars. It analyses the current selected objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
+A WIP analysis tool for VRChat avatars. It analyses the current selected objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
 Currently, this checks the following:
 
 - Polygons
@@ -54,6 +54,6 @@ Currently, this checks the following:
 - Material Slots
 - Bones
 
-If something is pushing the selected objects into the Very Poor Performance Rank, the UI will report what it is, with a mild suggestion on a fix. 
-
+If something is pushing the selected objects into the Very Poor Performance Rank, the UI will attempt to report what it is, with a mild suggestion on a fix. 
+Currently some modifier interactions are analysed incorrectly (Subdivision, for example), so some stats may be incorrect. 
 NOTE: Currently, the performance stats are hard-coded, so if there are updates to them, they could be incorrect if the code is not changed accordingly. 
