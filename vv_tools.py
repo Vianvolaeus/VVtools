@@ -304,6 +304,43 @@ def analyze_selected_objects():
 
     return statistics
 
+def analyze_selected_objects():
+    import bpy
+
+    statistics = {
+        'polygons': 0,
+        'texture_memory': 0,
+        'skinned_meshes': 0,
+        'meshes': 0,
+        'material_slots': 0,
+        'bones': 0,
+    }
+
+    # Iterate through selected objects
+    for obj in bpy.context.selected_objects:
+        if obj.type == 'MESH':
+            statistics['polygons'] += len(obj.data.polygons)
+            statistics['material_slots'] += len(obj.material_slots)
+
+            if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
+                statistics['skinned_meshes'] += 1
+            else:
+                statistics['meshes'] += 1
+
+            # Estimate texture memory
+            for mat_slot in obj.material_slots:
+                if mat_slot.material:
+                    for node in mat_slot.material.node_tree.nodes:
+                        if node.type == "TEX_IMAGE":
+                            img = node.image
+                            if img:
+                                statistics['texture_memory'] += img.size[0] * img.size[1] * 4
+                                
+        elif obj.type == 'ARMATURE':
+            statistics['bones'] += len(obj.data.bones)
+
+    return statistics
+
 class VVTools_OT_VRCAnalyse(Operator):
     bl_idname = "vv_tools.vrc_analyse"
     bl_label = "VRC Analyse"
@@ -314,14 +351,22 @@ class VVTools_OT_VRCAnalyse(Operator):
         context.scene["VRC_Analysis_Results"] = result
         return {"FINISHED"}
 
-max_values = {
-    'polygons': 69999,
-    'texture_memory': 536870912,
-    'skinned_meshes': 16,
-    'meshes': 24,
-    'material_slots': 32,
-    'bones': 400,
-}
+def performance_rank(statistics):
+    ranks = [
+        ('Excellent', {'polygons': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
+        ('Good', {'polygons': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
+        ('Medium', {'polygons': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
+        ('Poor', {'polygons': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
+        ('Very Poor', {}),
+    ]
+    
+    rank_index = 0
+    for key, value in statistics.items():
+        for i, (rank, limits) in enumerate(ranks[:-1]):
+            if value > limits[key]:
+                rank_index = max(rank_index, i + 1)
+    
+    return ranks[rank_index][0]
 
 # New functions can be added here. Keep this line for organisation haha
 
@@ -329,7 +374,7 @@ max_values = {
 
 class VVTools_PT_Panel(Panel):
     bl_idname = "VV_TOOLS_PT_panel"
-    bl_label = "VV Tools"
+    bl_label = "VV Tools - General"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "VV"
@@ -352,15 +397,30 @@ class VVTools_PT_VRCAnalysis(Panel):
     def draw(self, context):
         layout = self.layout
 
-        # Create a button to perform VRC Analysis
         layout.operator("vv_tools.vrc_analyse")
 
-        # Check if the results are available and display them
-        if "VRC_Analysis_Results" in context.scene:
-            results = context.scene["VRC_Analysis_Results"]
-            for key, value in results.items():
-                row = layout.row()
-                row.label(text=f"{key.capitalize()}: {value}/{max_values[key]}")
+        results = context.scene.get("VRC_Analysis_Results", None)
+        if results:
+            row = layout.row()
+            row.label(text=f"Polygons: {results['polygons']}/69999")
+
+            row = layout.row()
+            row.label(text=f"Texture Memory: {results['texture_memory'] // (1024 * 1024)} MB")
+
+            row = layout.row()
+            row.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
+
+            row = layout.row()
+            row.label(text=f"Meshes: {results['meshes']}")
+
+            row = layout.row()
+            row.label(text=f"Material Slots: {results['material_slots']}")
+
+            row = layout.row()
+            row.label(text=f"Bones: {results['bones']}")
+
+            row = layout.row()
+            row.label(text=f"Performance Rank: {performance_rank(results)}")
 
 
 def register():
