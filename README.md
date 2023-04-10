@@ -55,5 +55,5 @@ Currently, this checks the following:
 - Bones
 
 If something is pushing the selected objects into the Very Poor Performance Rank, the UI will attempt to report what it is, with a mild suggestion on a fix. 
-Currently some modifier interactions are analysed incorrectly (Subdivision, for example), so some stats may be incorrect. 
+Currently some modifier interactions are analysed incorrectly, so some stats may be incorrect. 
 NOTE: Currently, the performance stats are hard-coded, so if there are updates to them, they could be incorrect if the code is not changed accordingly. 

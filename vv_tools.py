@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 5),
+    "version": (0, 4, 6),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -15,7 +15,7 @@ import os
 import textwrap
 import re
 from bpy.types import Panel, Operator, PropertyGroup
-from bpy.props import StringProperty, PointerProperty, BoolProperty
+from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
 
 icon_collection = None
@@ -326,7 +326,13 @@ def analyze_selected_objects():
     # Iterate through selected objects
     for obj in bpy.context.selected_objects:
         if obj.type == 'MESH':
-            statistics['polygons'] += len(obj.data.polygons)
+            # Apply modifiers to a temporary mesh
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            temp_obj = obj.evaluated_get(depsgraph)
+            temp_mesh = bpy.data.meshes.new_from_object(temp_obj)
+            
+            statistics['polygons'] += len(temp_mesh.polygons)
+            bpy.data.meshes.remove(temp_mesh)
             statistics['material_slots'] += len(obj.material_slots)
 
             if any(mod for mod in obj.modifiers if mod.type == 'ARMATURE'):
@@ -358,6 +364,10 @@ class VVTools_OT_VRCAnalyse(Operator):
     def execute(self, context):
         result = analyze_selected_objects()
         context.scene["VRC_Analysis_Results"] = result
+
+        # Redraw the area to update the panel
+        context.area.tag_redraw()
+
         return {"FINISHED"}
 
 # New functions can be added here. Keep this line for organisation haha
@@ -380,8 +390,8 @@ class VVTools_PT_Panel(Panel):
         layout.operator("vv_tools.reload_textures_of_selected")
 
 class VVTools_PT_VRCAnalysis(Panel):
+    bl_idname = "VV_TOOLS_PT_vrc_analysis"
     bl_label = "VV Tools - VRC"
-    bl_idname = "VVTOOLS_PT_vrc_analysis"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "VV"
