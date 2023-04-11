@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 5, 0),
+    "version": (0, 5, 1),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -19,6 +19,7 @@ import json
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
+from mathutils import Vector
 
 # Register icons, incomplete, but not code-breaking. Finish later
 
@@ -68,6 +69,8 @@ class TOPBAR_MT_VV_General(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
+        layout.operator("vv_tools.vp_wireframe")
+        layout.operator("vv_tools.add_viewport_camera")
  
 class TOPBAR_MT_VV_Materials(bpy.types.Menu):
     bl_label = "Materials"
@@ -106,6 +109,80 @@ class TOPBAR_MT_VV_VRC(bpy.types.Menu):
 classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
+
+# Add Viewport Camera
+## Adds a passepartout camera using the current viewport position, adds a DoF Empty and projects it towards the nearest object the camera is pointing at
+
+import bpy
+from bpy.types import Operator
+from mathutils import Vector
+
+class VVTools_OT_AddViewportCamera(Operator):
+    bl_idname = "vv_tools.add_viewport_camera"
+    bl_label = "Add Viewport Camera"
+    bl_description = "Add a new camera named 'Viewport Camera', set it as active, align it to the current viewport view, and set up an Empty as its Depth of Field object."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        # Create a new camera and set it as the active camera
+        bpy.ops.object.camera_add()
+        camera = bpy.context.active_object
+        camera.name = "Viewport Camera"
+        bpy.context.scene.camera = camera
+
+        # Set camera properties
+        camera.data.passepartout_alpha = 1
+
+        # Align the camera to the current viewport view
+        bpy.ops.view3d.camera_to_view()
+
+        # Create a new Empty object
+        bpy.ops.object.empty_add(type='PLAIN_AXES')
+        empty = bpy.context.active_object
+        empty.name = "DoF Empty"
+
+        # Set up the Depth of Field object for the camera
+        camera.data.dof.aperture_fstop = 1.2
+        camera.data.dof.use_dof = True
+        camera.data.dof.focus_object = empty
+
+        # Project a ray from the camera to find the first face it touches
+        context = bpy.context
+        depsgraph = context.evaluated_depsgraph_get()
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                region = area.regions[-1]
+                region_3d = area.spaces[0].region_3d
+                break
+
+        origin = camera.location
+        direction = camera.matrix_world.to_quaternion() @ Vector((0.0, 0.0, -1.0))
+        result, location, normal, index, obj, matrix = context.scene.ray_cast(depsgraph, origin, direction)
+
+        # Move the Empty object to the position of the first face touched by the projected ray
+        if result:
+            empty.location = location
+
+        return {'FINISHED'}
+
+
+
+# Viewport Wireframe
+## Simple global wireframe toggle for the viewport
+
+class VVTools_OT_ViewportWireframe(Operator):
+    bl_idname = "vv_tools.vp_wireframe"
+    bl_label = "Viewport Wireframe"
+    bl_description = "Toggles global wireframe in the viewport."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL',}
+    
+    def execute(self, context):
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D':
+                        space.overlay.show_wireframes = not space.overlay.show_wireframes
+        return {'FINISHED'}
 
 # Smoothed Rigging Xfer from Active
 ## Uses Data Transfer modifier to project interpolated face vertex groups to selected meshes, then parents them to the Armature active on the object it took it's data from
@@ -509,6 +586,8 @@ class VVTools_PT_General(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
+        layout.operator("vv_tools.vp_wireframe")
+        layout.operator("vv_tools.add_viewport_camera")
 
 class VVTools_PT_Mesh_Operators(Panel):
     bl_idname = "VV_TOOLS_PT_mesh_operators"
@@ -595,6 +674,8 @@ class VVTools_PT_VRCAnalysis(Panel):
 # Class list, add new classes here so they (un)register properly...
 
 classes = [
+    VVTools_OT_AddViewportCamera,
+    VVTools_OT_ViewportWireframe,
     VVTools_OT_SmoothRigXfer,
     VVTools_OT_VisGeoShapeKey,
     VVTools_OT_RenameDataBlocks,
