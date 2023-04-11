@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 6),
+    "version": (0, 4, 8),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -18,9 +18,9 @@ from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
 
-icon_collection = None
-
 # Register icons, incomplete, but not code-breaking. Finish later
+
+icon_collection = None
 
 def register_icons():
     global icon_collection
@@ -40,33 +40,66 @@ def unregister_icons():
     bpy.utils.previews.remove(icon_collection)
     icon_collection = None
 
-# Draw submenu and menu for header. NEW OPERATORS SHOULD BE ADDED HERE AS WELL AS CLASS REGISTRY. 
-
-class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
-    bl_label = "VV Tools Submenu"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("vv_tools.add_visual_geometry")
-        layout.operator("vv_tools.rename_data_blocks")
-        layout.operator("vv_tools.set_modifiers_visibility")
-        layout.operator("vv_tools.merge_to_active_bone")
-        layout.operator("vv_tools.reload_textures_of_selected")
-        layout.operator("vv_tools.vrc_analyse")
-        #Add more operators here as required
+# Draw menu and submenus for header. OPERATORS NEED TO BE ADDED HERE (IN THEIR CORRECT SUBMENU, ETC).  
 
 class TOPBAR_MT_custom_menu(bpy.types.Menu):
     bl_label = "VV Tools"
-    
+    bl_idname = "TOPBAR_MT_custom_menu"
+
     def draw(self, context):
         layout = self.layout
-        layout.menu("TOPBAR_MT_custom_sub_menu")
+        layout.menu("TOPBAR_MT_VV_General")
+        layout.menu("TOPBAR_MT_VV_Materials")
+        layout.menu("TOPBAR_MT_VV_Mesh_Operators")
+        layout.menu("TOPBAR_MT_VV_Rigging")
+        layout.menu("TOPBAR_MT_VV_VRC")
 
     def menu_draw(self, context):
         self.layout.menu("TOPBAR_MT_custom_menu")
 
-classes = (TOPBAR_MT_custom_sub_menu, TOPBAR_MT_custom_menu)
 
+class TOPBAR_MT_VV_General(bpy.types.Menu):
+    bl_label = "General"
+    bl_idname = "TOPBAR_MT_VV_General"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.rename_data_blocks")
+ 
+class TOPBAR_MT_VV_Materials(bpy.types.Menu):
+    bl_label = "Materials"
+    bl_idname = "TOPBAR_MT_VV_Materials"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.reload_textures_of_selected")
+
+class TOPBAR_MT_VV_Mesh_Operators(bpy.types.Menu):
+    bl_label = "Mesh Operators"
+    bl_idname = "TOPBAR_MT_VV_Mesh_Operators"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_visual_geometry")
+        layout.operator("vv_tools.set_modifiers_visibility")
+
+class TOPBAR_MT_VV_Rigging(bpy.types.Menu):
+    bl_label = "Rigging"
+    bl_idname = "TOPBAR_MT_VV_Rigging"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.merge_to_active_bone")
+
+class TOPBAR_MT_VV_VRC(bpy.types.Menu):
+    bl_label = "VRC"
+    bl_idname = "TOPBAR_MT_VV_VRC"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.vrc_analyse")
+
+classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
 
@@ -97,6 +130,7 @@ def add_visual_geometry_as_shape_key(obj):
 class VVTools_OT_VisGeoShapeKey(Operator):
     bl_idname = "vv_tools.add_visual_geometry"
     bl_label = "Visual Geo to Shape"
+    bl_icon = "SHAPEKEY_DATA"
     bl_description = "Runs Visual Geometry To Mesh, appends to current object as Shape Key. Does not work with operations that change vertex count."
     bl_options = {"REGISTER", "UNDO", "INTERNAL",}
     bl_category = {"VV_tools"}
@@ -295,7 +329,7 @@ def performance_warning(statistics):
         warnings.append("Polygon count is high. Consider dissolving unnecessary geometry, decimation, or removing unnecessary geometry entirely.")
 
     if statistics['texture_memory'] > 150 * 1024 * 1024:
-        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, bear in mind Unity will downres these to 2K on import.")
+        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, remember Unity will downres these to 2K on import.")
 
     if statistics['skinned_meshes'] > 16:
         warnings.append("Skinned Mesh count is high. Consider merging skinned meshes as appropriate, or offloading things like outfit changes to a different avatar entirely.")
@@ -326,7 +360,7 @@ def analyze_selected_objects():
     # Iterate through selected objects
     for obj in bpy.context.selected_objects:
         if obj.type == 'MESH':
-            # Apply modifiers to a temporary mesh
+            # Apply modifiers to a temporary mesh. This is so things like Subdiv get calcuated properly, since they can and do get exported. 
             depsgraph = bpy.context.evaluated_depsgraph_get()
             temp_obj = obj.evaluated_get(depsgraph)
             temp_mesh = bpy.data.meshes.new_from_object(temp_obj)
@@ -340,7 +374,7 @@ def analyze_selected_objects():
             else:
                 statistics['meshes'] += 1
 
-            # Estimate texture memory
+            # Estimate texture memory... I think this is correct and accounts for texture sharing?
             for mat_slot in obj.material_slots:
                 if mat_slot.material:
                     for node in mat_slot.material.node_tree.nodes:
@@ -370,12 +404,12 @@ class VVTools_OT_VRCAnalyse(Operator):
 
         return {"FINISHED"}
 
-# New functions can be added here. Keep this line for organisation haha
+# End of operator list -
 
-#Final side panel, top menu / register classes
+# Panels, for 3Dview sidebar
 
-class VVTools_PT_Panel(Panel):
-    bl_idname = "VV_TOOLS_PT_panel"
+class VVTools_PT_General(Panel):
+    bl_idname = "VV_TOOLS_PT_General"
     bl_label = "VV Tools - General"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -383,10 +417,40 @@ class VVTools_PT_Panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("vv_tools.add_visual_geometry")
         layout.operator("vv_tools.rename_data_blocks")
+
+class VVTools_PT_Mesh_Operators(Panel):
+    bl_idname = "VV_TOOLS_PT_mesh_operators"
+    bl_label = "VV Tools - Mesh Operators"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_visual_geometry")
         layout.operator("vv_tools.set_modifiers_visibility")
+
+class VVTools_PT_Rigging(Panel):
+    bl_idname = "VV_TOOLS_PT_rigging"
+    bl_label = "VV Tools - Rigging"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+
+class VVTools_PT_Materials(Panel):
+    bl_idname = "VV_TOOLS_PT_materials"
+    bl_label = "VV Tools - Materials"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
 
 class VVTools_PT_VRCAnalysis(Panel):
@@ -413,7 +477,7 @@ class VVTools_PT_VRCAnalysis(Panel):
             warnings = performance_warning(results)
             for warning in warnings:
                 box = layout.box()
-                lines = re.split(r'(?<=\. |, )', warning)  # Split the text at both '. ' and ', '
+                lines = re.split(r'(?<=[.!,] )', warning)  # Split the text at both '. ' and ', '. This is a bit of a hack - maybe I should shorten warnings...
                 for line in lines:
                     if line:
                         box.label(text=line)
@@ -431,8 +495,11 @@ def register():
     bpy.utils.register_class(VVTools_OT_MergeToActiveBone)
     bpy.utils.register_class(VVTools_OT_ReloadTexturesOfSelected)
     bpy.utils.register_class(VVTools_OT_VRCAnalyse)
+    bpy.utils.register_class(VVTools_PT_General)
+    bpy.utils.register_class(VVTools_PT_Mesh_Operators)
+    bpy.utils.register_class(VVTools_PT_Rigging)
+    bpy.utils.register_class(VVTools_PT_Materials)
     bpy.utils.register_class(VVTools_PT_VRCAnalysis)
-    bpy.utils.register_class(VVTools_PT_Panel)
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_custom_menu.menu_draw)
@@ -445,8 +512,11 @@ def unregister():
     bpy.utils.unregister_class(VVTools_OT_MergeToActiveBone)
     bpy.utils.unregister_class(VVTools_OT_ReloadTexturesOfSelected)
     bpy.utils.unregister_class(VVTools_OT_VRCAnalyse)
+    bpy.utils.unregister_class(VVTools_PT_General)
+    bpy.utils.unregister_class(VVTools_PT_Mesh_Operators)
+    bpy.utils.unregister_class(VVTools_PT_Rigging)
+    bpy.utils.unregister_class(VVTools_PT_Materials)
     bpy.utils.unregister_class(VVTools_PT_VRCAnalysis)
-    bpy.utils.unregister_class(VVTools_PT_Panel)
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_custom_menu.menu_draw)
     for cls in classes:
         bpy.utils.unregister_class(cls)
