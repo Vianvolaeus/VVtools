@@ -587,6 +587,7 @@ class VVTools_PT_VRCAnalysis(Panel):
 
         else:
             layout.label(text="No analysis data available")
+            layout.label(text="Will run slow on first use!")
 
         layout.operator("vv_tools.vrc_analyse")
 
