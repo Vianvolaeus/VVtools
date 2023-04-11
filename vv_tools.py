@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 6),
+    "version": (0, 5, 0),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -14,13 +14,15 @@ import bpy
 import os
 import textwrap
 import re
+import json
+
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
 
-icon_collection = None
-
 # Register icons, incomplete, but not code-breaking. Finish later
+
+icon_collection = None
 
 def register_icons():
     global icon_collection
@@ -40,37 +42,143 @@ def unregister_icons():
     bpy.utils.previews.remove(icon_collection)
     icon_collection = None
 
-# Draw submenu and menu for header. NEW OPERATORS SHOULD BE ADDED HERE AS WELL AS CLASS REGISTRY. 
-
-class TOPBAR_MT_custom_sub_menu(bpy.types.Menu):
-    bl_label = "VV Tools Submenu"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.operator("vv_tools.add_visual_geometry")
-        layout.operator("vv_tools.rename_data_blocks")
-        layout.operator("vv_tools.set_modifiers_visibility")
-        layout.operator("vv_tools.merge_to_active_bone")
-        layout.operator("vv_tools.reload_textures_of_selected")
-        layout.operator("vv_tools.vrc_analyse")
-        #Add more operators here as required
+# Draw menu for header. SUBMENUS NEED TO BE DRAWN INSIDE THE CUSTOM MENU, ADD THEM TO layout.menu HERE.  
 
 class TOPBAR_MT_custom_menu(bpy.types.Menu):
     bl_label = "VV Tools"
-    
+    bl_idname = "TOPBAR_MT_custom_menu"
+
     def draw(self, context):
         layout = self.layout
-        layout.menu("TOPBAR_MT_custom_sub_menu")
+        layout.menu("TOPBAR_MT_VV_General")
+        layout.menu("TOPBAR_MT_VV_Materials")
+        layout.menu("TOPBAR_MT_VV_Mesh_Operators")
+        layout.menu("TOPBAR_MT_VV_Rigging")
+        layout.menu("TOPBAR_MT_VV_VRC")
 
     def menu_draw(self, context):
         self.layout.menu("TOPBAR_MT_custom_menu")
 
-classes = (TOPBAR_MT_custom_sub_menu, TOPBAR_MT_custom_menu)
+# Draw submenus for header Top Menu. OPERATORS NEED TO BE ADDED TO LAYOUT OF SUBMENUS ("vv_tools(X)"), IN THEIR CORRECT CATEGORIES 
 
+class TOPBAR_MT_VV_General(bpy.types.Menu):
+    bl_label = "General"
+    bl_idname = "TOPBAR_MT_VV_General"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.rename_data_blocks")
+ 
+class TOPBAR_MT_VV_Materials(bpy.types.Menu):
+    bl_label = "Materials"
+    bl_idname = "TOPBAR_MT_VV_Materials"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.reload_textures_of_selected")
+
+class TOPBAR_MT_VV_Mesh_Operators(bpy.types.Menu):
+    bl_label = "Mesh Operators"
+    bl_idname = "TOPBAR_MT_VV_Mesh_Operators"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_visual_geometry")
+        layout.operator("vv_tools.set_modifiers_visibility")
+
+class TOPBAR_MT_VV_Rigging(bpy.types.Menu):
+    bl_label = "Rigging"
+    bl_idname = "TOPBAR_MT_VV_Rigging"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.smooth_rig_xfer")
+
+class TOPBAR_MT_VV_VRC(bpy.types.Menu):
+    bl_label = "VRC"
+    bl_idname = "TOPBAR_MT_VV_VRC"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.vrc_analyse")
+
+classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
 
+# Smoothed Rigging Xfer from Active
+## Uses Data Transfer modifier to project interpolated face vertex groups to selected meshes, then parents them to the Armature active on the object it took it's data from
+### Use case: Nearly automatic rigging of clothing in some cases
 
+class VVTools_OT_SmoothRigXfer(Operator):
+    bl_idname = "vv_tools.smooth_rig_xfer"
+    bl_label = "Smooth Rig Transfer"
+    bl_description = "Transfer vertex weights from active object to selected objects with smoothing"
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL',}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(context.scene, "vv_tools_source_object")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        source_object = context.scene.vv_tools_source_object
+        selected_objects = context.selected_objects
+        source_armature = source_object.find_armature()
+
+        if source_armature is None:
+            self.report({'ERROR'}, "Source object has no armature")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj == source_object:
+                continue
+            if obj.type != 'MESH':
+                continue
+
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+
+            # Create vertex groups in the target object
+            for vertex_group in source_object.vertex_groups:
+                obj.vertex_groups.new(name=vertex_group.name)
+
+            # Add Data Transfer modifier
+            dt_modifier = obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+            dt_modifier.object = source_object
+            dt_modifier.use_vert_data = True
+            dt_modifier.data_types_verts = {'VGROUP_WEIGHTS'}
+            dt_modifier.vert_mapping = 'POLYINTERP_NEAREST'
+
+            # Apply the Data Transfer modifier
+            bpy.ops.object.modifier_apply({"object": obj}, modifier=dt_modifier.name)
+
+            # Parent to the armature
+            bpy.ops.object.select_all(action='DESELECT')
+            source_armature.select_set(True)
+            obj.select_set(True)
+            context.view_layer.objects.active = source_armature
+            bpy.ops.object.parent_set(type='ARMATURE')
+
+            # Smooth vertex groups
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+            bpy.ops.object.vertex_group_smooth(
+                group_select_mode='ALL',
+                factor=0.5,
+                repeat=3,
+                expand=-0.25
+            )
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {'FINISHED'}
+
+        
 # Visual Geometry To Shape Key. Uses the Visual Geometry To Mesh operator on a dupliate mesh, and uses Join As Shapes to add it back as a Shape Key to original Mesh object. Cleans dupe. 
 ## Does not work with modifiers that change vertex count, since they cannot be added as a shapekey, of course!
 ### Useful for modifier based visual dev / concepting. 
@@ -97,6 +205,7 @@ def add_visual_geometry_as_shape_key(obj):
 class VVTools_OT_VisGeoShapeKey(Operator):
     bl_idname = "vv_tools.add_visual_geometry"
     bl_label = "Visual Geo to Shape"
+    bl_icon = "SHAPEKEY_DATA"
     bl_description = "Runs Visual Geometry To Mesh, appends to current object as Shape Key. Does not work with operations that change vertex count."
     bl_options = {"REGISTER", "UNDO", "INTERNAL",}
     bl_category = {"VV_tools"}
@@ -167,17 +276,11 @@ class VVTools_OT_RenameDataBlocks(Operator):
 # Merge Bones to Active
 ## Merges weights of selected bones to the active bone, and removes the 'empty' bones. 
 
-def delete_bones(obj, bones):
-    bpy.ops.object.mode_set(mode='POSE')
-    
-    for bone in bones:
-        bpy.context.active_bone.select = False
-        bone.bone.select = True
-    
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.armature.delete()
-    bpy.ops.object.mode_set(mode='POSE')
-
+def normalize_weights(weights):
+    total_weight = sum(weights.values())
+    if total_weight == 0:
+        return weights
+    return {key: value / total_weight for key, value in weights.items()}
 
 def merge_vertex_weights_and_remove_bones(context):
     obj = context.active_object
@@ -196,34 +299,53 @@ def merge_vertex_weights_and_remove_bones(context):
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Find the mesh object associated with the armature
-    mesh_obj = None
-    for ob in context.scene.objects:
-        if ob.type == 'MESH' and ob.find_armature() == obj:
-            mesh_obj = ob
-            break
+    mesh_objects = [ob for ob in context.scene.objects if ob.type == 'MESH' and ob.find_armature() == obj]
 
-    if mesh_obj is None:
-        return {"ERROR"}, "No mesh object found with the active armature as its modifier"
+    if not mesh_objects:
+        return {"ERROR"}, "No mesh objects found with the active armature as their modifier"
 
-    for bone in selected_bones:
-        # Merge vertex weights
-        if bone.name in mesh_obj.vertex_groups:
-            source_group = mesh_obj.vertex_groups[bone.name]
-            active_group = mesh_obj.vertex_groups.get(active_bone.name, mesh_obj.vertex_groups.new(name=active_bone.name))
+    for mesh_obj in mesh_objects:
+        if active_bone.name not in mesh_obj.vertex_groups:
+            mesh_obj.vertex_groups.new(name=active_bone.name)
 
-            for vertex in mesh_obj.data.vertices:
-                try:
-                    weight = source_group.weight(vertex.index)
-                    active_group.add([vertex.index], weight, 'ADD')
-                except RuntimeError:
-                    pass
+        active_group = mesh_obj.vertex_groups[active_bone.name]
 
-            mesh_obj.vertex_groups.remove(source_group)
+        vertex_weights = {}
+        for bone in selected_bones:
+            if bone.name in mesh_obj.vertex_groups:
+                source_group = mesh_obj.vertex_groups[bone.name]
+                for vertex in mesh_obj.data.vertices:
+                    for group in vertex.groups:
+                        if group.group == source_group.index:
+                            if vertex.index not in vertex_weights:
+                                vertex_weights[vertex.index] = {bone.name: group.weight}
+                            else:
+                                vertex_weights[vertex.index][bone.name] = max(group.weight, vertex_weights[vertex.index].get(bone.name, 0))
 
-    delete_bones(obj, selected_bones)
+        for vertex_index, weights in vertex_weights.items():
+            normalized_weights = normalize_weights(weights)
+            total_weight = sum(normalized_weights.values())
+            if total_weight > 0:
+                active_group.add([vertex_index], total_weight, 'ADD')
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        for bone in selected_bones:
+            edit_bone = obj.data.edit_bones.get(bone.name)
+            if edit_bone is not None:
+                obj.data.edit_bones.remove(edit_bone)
+            if bone.name in mesh_obj.vertex_groups:
+                source_group = mesh_obj.vertex_groups[bone.name]
+                mesh_obj.vertex_groups.remove(source_group)
+
+    bpy.ops.object.mode_set(mode='POSE')
+
+    for mesh_obj in mesh_objects:
+        mesh_obj.data.update()
 
     return {"FINISHED"}, ""
+
+
+
 
 
 
@@ -266,17 +388,17 @@ class VVTools_OT_ReloadTexturesOfSelected(Operator):
 
 # VRC Analysis of Selected
 ## Analysis tool for VRchat avatars. Takes the selected objects and returns an estimate of it's performance ranking. 
-### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently is limited to Poor or below.
+### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently shows warnings when you are potentially in the Very Poor catgeory, but should still show what performance rank you have
 
 import bpy
 from bpy.types import Operator, Panel
 
 def performance_rank(statistics):
     ranks = [
-        ('Excellent', {'polygons': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
-        ('Good', {'polygons': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
-        ('Medium', {'polygons': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
-        ('Poor', {'polygons': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
+        ('Excellent', {'triangles': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
+        ('Good', {'triangles': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
+        ('Medium', {'triangles': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
+        ('Poor', {'triangles': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
         ('Very Poor', {}),
     ]
     
@@ -291,11 +413,11 @@ def performance_rank(statistics):
 def performance_warning(statistics):
     warnings = []
 
-    if statistics['polygons'] > 70000:
+    if statistics['triangles'] > 70000:
         warnings.append("Polygon count is high. Consider dissolving unnecessary geometry, decimation, or removing unnecessary geometry entirely.")
 
     if statistics['texture_memory'] > 150 * 1024 * 1024:
-        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, bear in mind Unity will downres these to 2K on import.")
+        warnings.append("Detected VRAM is high! Consider reducing texture resolution, or using VRAM reduction techniques in Unity. If you are using high resolution source textures, remember Unity will downres these to 2K on import.")
 
     if statistics['skinned_meshes'] > 16:
         warnings.append("Skinned Mesh count is high. Consider merging skinned meshes as appropriate, or offloading things like outfit changes to a different avatar entirely.")
@@ -313,7 +435,7 @@ def performance_warning(statistics):
 
 def analyze_selected_objects():
     statistics = {
-        'polygons': 0,
+        'triangles': 0,
         'texture_memory': 0,
         'skinned_meshes': 0,
         'meshes': 0,
@@ -326,12 +448,15 @@ def analyze_selected_objects():
     # Iterate through selected objects
     for obj in bpy.context.selected_objects:
         if obj.type == 'MESH':
-            # Apply modifiers to a temporary mesh
+            # Apply modifiers to a temporary mesh. This is so things like Subdiv get calcuated properly, since they can and do get exported. 
             depsgraph = bpy.context.evaluated_depsgraph_get()
             temp_obj = obj.evaluated_get(depsgraph)
             temp_mesh = bpy.data.meshes.new_from_object(temp_obj)
             
-            statistics['polygons'] += len(temp_mesh.polygons)
+            #Calculate triangle count. We need to calculate *tris* since perf rank is based on these, not the internal Blender polygon calculation
+            triangles = sum(len(p.vertices) - 2 for p in temp_mesh.polygons)
+            statistics['triangles'] += triangles
+
             bpy.data.meshes.remove(temp_mesh)
             statistics['material_slots'] += len(obj.material_slots)
 
@@ -340,7 +465,7 @@ def analyze_selected_objects():
             else:
                 statistics['meshes'] += 1
 
-            # Estimate texture memory
+            # Estimate texture memory... I think this is correct and accounts for texture sharing?
             for mat_slot in obj.material_slots:
                 if mat_slot.material:
                     for node in mat_slot.material.node_tree.nodes:
@@ -348,7 +473,7 @@ def analyze_selected_objects():
                             img = node.image
                             if img:
                                 if img not in texture_memory_usage:
-                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4
+                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4 // 4 # Assuming a DXT5 compression ratio for textures, at their current resolution (not 2k). This should be a little more accurate, I think?
                                     
         elif obj.type == 'ARMATURE':
             statistics['bones'] += len(obj.data.bones)
@@ -363,19 +488,19 @@ class VVTools_OT_VRCAnalyse(Operator):
 
     def execute(self, context):
         result = analyze_selected_objects()
-        context.scene["VRC_Analysis_Results"] = result
+        context.scene["VRC_Analysis_Results"] = json.dumps(result)
 
-        # Redraw the area to update the panel
+        # Redraw the area to update the panel. Without this, user input is required to make the panel update. 
         context.area.tag_redraw()
 
         return {"FINISHED"}
 
-# New functions can be added here. Keep this line for organisation haha
+# End of operator list - internal tag applied to operators since we draw a top menu and submenus, things will be categorized in search nicely this way
 
-#Final side panel, top menu / register classes
+# Panels, for 3Dview sidebar
 
-class VVTools_PT_Panel(Panel):
-    bl_idname = "VV_TOOLS_PT_panel"
+class VVTools_PT_General(Panel):
+    bl_idname = "VV_TOOLS_PT_General"
     bl_label = "VV Tools - General"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -383,10 +508,47 @@ class VVTools_PT_Panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("vv_tools.add_visual_geometry")
         layout.operator("vv_tools.rename_data_blocks")
+
+class VVTools_PT_Mesh_Operators(Panel):
+    bl_idname = "VV_TOOLS_PT_mesh_operators"
+    bl_label = "VV Tools - Mesh Operators"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_visual_geometry")
         layout.operator("vv_tools.set_modifiers_visibility")
+
+class VVTools_PT_Rigging(Panel):
+    bl_idname = "VV_TOOLS_PT_rigging"
+    bl_label = "VV Tools - Rigging"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode in {'OBJECT', 'EDIT_ARMATURE', 'POSE'}
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.smooth_rig_xfer")
+        layout.prop(context.scene, "vv_tools_source_object", text="Source Object")
+
+
+class VVTools_PT_Materials(Panel):
+    bl_idname = "VV_TOOLS_PT_materials"
+    bl_label = "VV Tools - Materials"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "VV"
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
 
 class VVTools_PT_VRCAnalysis(Panel):
@@ -398,11 +560,16 @@ class VVTools_PT_VRCAnalysis(Panel):
 
     def draw(self, context):
         layout = self.layout
-        results = context.scene.get("VRC_Analysis_Results")
+
+        results = None
+        if "VRC_Analysis_Results" in context.scene:
+            results_str = context.scene["VRC_Analysis_Results"]
+            results = json.loads(results_str)
+
 
         if results:
-            layout.label(text=f"Polygons: {results['polygons']}/69999")
-            layout.label(text=f"Texture Memory: {results['texture_memory'] / (1024 * 1024):.2f} MB")
+            layout.label(text=f"Polygons (Tris): {results['triangles']}/69999")
+            layout.label(text=f"Texture Memory (EXPERIMENTAL): {results['texture_memory'] / (1024 * 1024):.2f} MB")
             layout.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
             layout.label(text=f"Meshes: {results['meshes']}")
             layout.label(text=f"Material Slots: {results['material_slots']}")
@@ -413,45 +580,57 @@ class VVTools_PT_VRCAnalysis(Panel):
             warnings = performance_warning(results)
             for warning in warnings:
                 box = layout.box()
-                lines = re.split(r'(?<=\. |, )', warning)  # Split the text at both '. ' and ', '
+                lines = re.split(r'(?<=[.!,] )', warning)  # Split the text at both '. ' and ', '. This is a bit of a hack - maybe I should shorten warnings...
                 for line in lines:
                     if line:
                         box.label(text=line)
 
         else:
             layout.label(text="No analysis data available")
+            layout.label(text="Will run slow on first use!")
 
         layout.operator("vv_tools.vrc_analyse")
 
 
-def register():
-    bpy.utils.register_class(VVTools_OT_VisGeoShapeKey)
-    bpy.utils.register_class(VVTools_OT_RenameDataBlocks)
-    bpy.utils.register_class(VVTools_OT_SetModifiersVisibility)
-    bpy.utils.register_class(VVTools_OT_MergeToActiveBone)
-    bpy.utils.register_class(VVTools_OT_ReloadTexturesOfSelected)
-    bpy.utils.register_class(VVTools_OT_VRCAnalyse)
-    bpy.utils.register_class(VVTools_PT_VRCAnalysis)
-    bpy.utils.register_class(VVTools_PT_Panel)
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_custom_menu.menu_draw)
+# Class list, add new classes here so they (un)register properly...
 
+classes = [
+    VVTools_OT_SmoothRigXfer,
+    VVTools_OT_VisGeoShapeKey,
+    VVTools_OT_RenameDataBlocks,
+    VVTools_OT_SetModifiersVisibility,
+    VVTools_OT_MergeToActiveBone,
+    VVTools_OT_ReloadTexturesOfSelected,
+    VVTools_OT_VRCAnalyse,
+    VVTools_PT_General,
+    VVTools_PT_Mesh_Operators,
+    VVTools_PT_Rigging,
+    VVTools_PT_Materials,
+    VVTools_PT_VRCAnalysis,
+    TOPBAR_MT_custom_menu,
+    TOPBAR_MT_VV_General,
+    TOPBAR_MT_VV_Materials,
+    TOPBAR_MT_VV_Mesh_Operators,
+    TOPBAR_MT_VV_Rigging,
+    TOPBAR_MT_VV_VRC,
+]
+
+def register():
+    for cls in classes:
+            bpy.utils.register_class(cls)
+    bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_custom_menu.menu_draw)
+    bpy.types.Scene.vv_tools_source_object = bpy.props.PointerProperty(
+        name="Source Object",
+        type=bpy.types.Object,
+        description="The source object to transfer vertex group data from"
+    )
 
 def unregister():
-    bpy.utils.unregister_class(VVTools_OT_VisGeoShapeKey)
-    bpy.utils.unregister_class(VVTools_OT_RenameDataBlocks)
-    bpy.utils.unregister_class(VVTools_OT_SetModifiersVisibility)
-    bpy.utils.unregister_class(VVTools_OT_MergeToActiveBone)
-    bpy.utils.unregister_class(VVTools_OT_ReloadTexturesOfSelected)
-    bpy.utils.unregister_class(VVTools_OT_VRCAnalyse)
-    bpy.utils.unregister_class(VVTools_PT_VRCAnalysis)
-    bpy.utils.unregister_class(VVTools_PT_Panel)
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_custom_menu.menu_draw)
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-
+    del bpy.types.Scene.vv_tools_source_object
+    
 if __name__ == "__main__":
     register()
 
-# internal tag applied to operators since we draw a top menu and submenu, things will be categorized in search nicely
