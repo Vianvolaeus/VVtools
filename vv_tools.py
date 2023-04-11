@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 5, 1),
+    "version": (0, 5, 2),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -146,14 +146,16 @@ class VVTools_OT_AddViewportCamera(Operator):
         camera.data.dof.use_dof = True
         camera.data.dof.focus_object = empty
 
+        # Parent the Empty object to the camera
+        bpy.ops.object.select_all(action='DESELECT')
+        empty.select_set(True)
+        camera.select_set(True)
+        context.view_layer.objects.active = camera
+        bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+
         # Project a ray from the camera to find the first face it touches
         context = bpy.context
         depsgraph = context.evaluated_depsgraph_get()
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                region = area.regions[-1]
-                region_3d = area.spaces[0].region_3d
-                break
 
         origin = camera.location
         direction = camera.matrix_world.to_quaternion() @ Vector((0.0, 0.0, -1.0))
@@ -163,7 +165,25 @@ class VVTools_OT_AddViewportCamera(Operator):
         if result:
             empty.location = location
 
+        # Move objects to the 'Viewport Camera' collection
+        coll_name = "Viewport Camera"
+        if coll_name not in bpy.data.collections:
+            viewport_camera_collection = bpy.data.collections.new(coll_name)
+            bpy.context.scene.collection.children.link(viewport_camera_collection)
+        else:
+            viewport_camera_collection = bpy.data.collections[coll_name]
+
+        # Move camera and empty to the collection
+        current_collection = camera.users_collection[0]
+        current_collection.objects.unlink(camera)
+        current_collection.objects.unlink(empty)
+        viewport_camera_collection.objects.link(camera)
+        viewport_camera_collection.objects.link(empty)
+
         return {'FINISHED'}
+
+
+
 
 
 
