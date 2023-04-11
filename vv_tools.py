@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 9),
+    "version": (0, 5, 0),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -14,6 +14,7 @@ import bpy
 import os
 import textwrap
 import re
+import json
 
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
@@ -374,17 +375,17 @@ class VVTools_OT_ReloadTexturesOfSelected(Operator):
 
 # VRC Analysis of Selected
 ## Analysis tool for VRchat avatars. Takes the selected objects and returns an estimate of it's performance ranking. 
-### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently is limited to Poor or below.
+### Naturally this will be prone to inaccuracies as some things don't directly translate. It currently shows warnings when you are potentially in the Very Poor catgeory, but should still show what performance rank you have
 
 import bpy
 from bpy.types import Operator, Panel
 
 def performance_rank(statistics):
     ranks = [
-        ('Excellent', {'polygons': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
-        ('Good', {'polygons': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
-        ('Medium', {'polygons': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
-        ('Poor', {'polygons': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
+        ('Excellent', {'triangles': 32000, 'texture_memory': 40 * 1024 * 1024, 'skinned_meshes': 1, 'meshes': 4, 'material_slots': 4, 'bones': 75}),
+        ('Good', {'triangles': 70000, 'texture_memory': 75 * 1024 * 1024, 'skinned_meshes': 2, 'meshes': 8, 'material_slots': 8, 'bones': 150}),
+        ('Medium', {'triangles': 70000, 'texture_memory': 110 * 1024 * 1024, 'skinned_meshes': 8, 'meshes': 16, 'material_slots': 16, 'bones': 256}),
+        ('Poor', {'triangles': 70000, 'texture_memory': 150 * 1024 * 1024, 'skinned_meshes': 16, 'meshes': 24, 'material_slots': 32, 'bones': 400}),
         ('Very Poor', {}),
     ]
     
@@ -399,7 +400,7 @@ def performance_rank(statistics):
 def performance_warning(statistics):
     warnings = []
 
-    if statistics['polygons'] > 70000:
+    if statistics['triangles'] > 70000:
         warnings.append("Polygon count is high. Consider dissolving unnecessary geometry, decimation, or removing unnecessary geometry entirely.")
 
     if statistics['texture_memory'] > 150 * 1024 * 1024:
@@ -421,7 +422,7 @@ def performance_warning(statistics):
 
 def analyze_selected_objects():
     statistics = {
-        'polygons': 0,
+        'triangles': 0,
         'texture_memory': 0,
         'skinned_meshes': 0,
         'meshes': 0,
@@ -439,7 +440,10 @@ def analyze_selected_objects():
             temp_obj = obj.evaluated_get(depsgraph)
             temp_mesh = bpy.data.meshes.new_from_object(temp_obj)
             
-            statistics['polygons'] += len(temp_mesh.polygons)
+            #Calculate triangle count. We need to calculate *tris* since perf rank is based on these, not the internal Blender polygon calculation
+            triangles = sum(len(p.vertices) - 2 for p in temp_mesh.polygons)
+            statistics['triangles'] += triangles
+
             bpy.data.meshes.remove(temp_mesh)
             statistics['material_slots'] += len(obj.material_slots)
 
@@ -456,7 +460,7 @@ def analyze_selected_objects():
                             img = node.image
                             if img:
                                 if img not in texture_memory_usage:
-                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4
+                                    texture_memory_usage[img] = img.size[0] * img.size[1] * 4 // 4 # Assuming a DXT5 compression ratio for textures, at their current resolution (not 2k). This should be a little more accurate, I think?
                                     
         elif obj.type == 'ARMATURE':
             statistics['bones'] += len(obj.data.bones)
@@ -471,9 +475,9 @@ class VVTools_OT_VRCAnalyse(Operator):
 
     def execute(self, context):
         result = analyze_selected_objects()
-        context.scene["VRC_Analysis_Results"] = result
+        context.scene["VRC_Analysis_Results"] = json.dumps(result)
 
-        # Redraw the area to update the panel
+        # Redraw the area to update the panel. Without this, user input is required to make the panel update. 
         context.area.tag_redraw()
 
         return {"FINISHED"}
@@ -543,11 +547,16 @@ class VVTools_PT_VRCAnalysis(Panel):
 
     def draw(self, context):
         layout = self.layout
-        results = context.scene.get("VRC_Analysis_Results")
+
+        results = None
+        if "VRC_Analysis_Results" in context.scene:
+            results_str = context.scene["VRC_Analysis_Results"]
+            results = json.loads(results_str)
+
 
         if results:
-            layout.label(text=f"Polygons: {results['polygons']}/69999")
-            layout.label(text=f"Texture Memory: {results['texture_memory'] / (1024 * 1024):.2f} MB")
+            layout.label(text=f"Polygons (Tris): {results['triangles']}/69999")
+            layout.label(text=f"Texture Memory (EXPERIMENTAL): {results['texture_memory'] / (1024 * 1024):.2f} MB")
             layout.label(text=f"Skinned Meshes: {results['skinned_meshes']}")
             layout.label(text=f"Meshes: {results['meshes']}")
             layout.label(text=f"Material Slots: {results['material_slots']}")
