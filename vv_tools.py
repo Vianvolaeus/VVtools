@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 4, 8),
+    "version": (0, 4, 9),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -14,6 +14,7 @@ import bpy
 import os
 import textwrap
 import re
+
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
@@ -40,7 +41,7 @@ def unregister_icons():
     bpy.utils.previews.remove(icon_collection)
     icon_collection = None
 
-# Draw menu and submenus for header. OPERATORS NEED TO BE ADDED HERE (IN THEIR CORRECT SUBMENU, ETC).  
+# Draw menu for header. SUBMENUS NEED TO BE DRAWN INSIDE THE CUSTOM MENU, ADD THEM TO layout.menu HERE.  
 
 class TOPBAR_MT_custom_menu(bpy.types.Menu):
     bl_label = "VV Tools"
@@ -57,6 +58,7 @@ class TOPBAR_MT_custom_menu(bpy.types.Menu):
     def menu_draw(self, context):
         self.layout.menu("TOPBAR_MT_custom_menu")
 
+# Draw submenus for header Top Menu. OPERATORS NEED TO BE ADDED TO LAYOUT OF SUBMENUS ("vv_tools(X)"), IN THEIR CORRECT CATEGORIES 
 
 class TOPBAR_MT_VV_General(bpy.types.Menu):
     bl_label = "General"
@@ -90,6 +92,7 @@ class TOPBAR_MT_VV_Rigging(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.smooth_rig_xfer")
 
 class TOPBAR_MT_VV_VRC(bpy.types.Menu):
     bl_label = "VRC"
@@ -103,7 +106,78 @@ classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, 
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
 
+# Smoothed Rigging Xfer from Active
+## Uses Data Transfer modifier to project interpolated face vertex groups to selected meshes, then parents them to the Armature active on the object it took it's data from
+### Use case: Nearly automatic rigging of clothing in some cases
 
+class VVTools_OT_SmoothRigXfer(Operator):
+    bl_idname = "vv_tools.smooth_rig_xfer"
+    bl_label = "Smooth Rig Transfer"
+    bl_description = "Transfer vertex weights from active object to selected objects with smoothing"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(context.scene, "vv_tools_source_object")
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        source_object = context.scene.vv_tools_source_object
+        selected_objects = context.selected_objects
+        source_armature = source_object.find_armature()
+
+        if source_armature is None:
+            self.report({'ERROR'}, "Source object has no armature")
+            return {'CANCELLED'}
+
+        for obj in selected_objects:
+            if obj == source_object:
+                continue
+            if obj.type != 'MESH':
+                continue
+
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+
+            # Create vertex groups in the target object
+            for vertex_group in source_object.vertex_groups:
+                obj.vertex_groups.new(name=vertex_group.name)
+
+            # Add Data Transfer modifier
+            dt_modifier = obj.modifiers.new(name="DataTransfer", type='DATA_TRANSFER')
+            dt_modifier.object = source_object
+            dt_modifier.use_vert_data = True
+            dt_modifier.data_types_verts = {'VGROUP_WEIGHTS'}
+            dt_modifier.vert_mapping = 'POLYINTERP_NEAREST'
+
+            # Apply the Data Transfer modifier
+            bpy.ops.object.modifier_apply({"object": obj}, modifier=dt_modifier.name)
+
+            # Parent to the armature
+            bpy.ops.object.select_all(action='DESELECT')
+            source_armature.select_set(True)
+            obj.select_set(True)
+            context.view_layer.objects.active = source_armature
+            bpy.ops.object.parent_set(type='ARMATURE')
+
+            # Smooth vertex groups
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='WEIGHT_PAINT')
+            bpy.ops.object.vertex_group_smooth(
+                group_select_mode='ALL',
+                factor=0.5,
+                repeat=3,
+                expand=-0.25
+            )
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {'FINISHED'}
+
+        
 # Visual Geometry To Shape Key. Uses the Visual Geometry To Mesh operator on a dupliate mesh, and uses Join As Shapes to add it back as a Shape Key to original Mesh object. Cleans dupe. 
 ## Does not work with modifiers that change vertex count, since they cannot be added as a shapekey, of course!
 ### Useful for modifier based visual dev / concepting. 
@@ -404,7 +478,7 @@ class VVTools_OT_VRCAnalyse(Operator):
 
         return {"FINISHED"}
 
-# End of operator list -
+# End of operator list - internal tag applied to operators since we draw a top menu and submenus, things will be categorized in search nicely this way
 
 # Panels, for 3Dview sidebar
 
@@ -438,9 +512,16 @@ class VVTools_PT_Rigging(Panel):
     bl_region_type = "UI"
     bl_category = "VV"
 
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.smooth_rig_xfer")
+        layout.prop(context.scene, "vv_tools_source_object", text="Source Object")
+
 
 class VVTools_PT_Materials(Panel):
     bl_idname = "VV_TOOLS_PT_materials"
@@ -488,40 +569,45 @@ class VVTools_PT_VRCAnalysis(Panel):
         layout.operator("vv_tools.vrc_analyse")
 
 
-def register():
-    bpy.utils.register_class(VVTools_OT_VisGeoShapeKey)
-    bpy.utils.register_class(VVTools_OT_RenameDataBlocks)
-    bpy.utils.register_class(VVTools_OT_SetModifiersVisibility)
-    bpy.utils.register_class(VVTools_OT_MergeToActiveBone)
-    bpy.utils.register_class(VVTools_OT_ReloadTexturesOfSelected)
-    bpy.utils.register_class(VVTools_OT_VRCAnalyse)
-    bpy.utils.register_class(VVTools_PT_General)
-    bpy.utils.register_class(VVTools_PT_Mesh_Operators)
-    bpy.utils.register_class(VVTools_PT_Rigging)
-    bpy.utils.register_class(VVTools_PT_Materials)
-    bpy.utils.register_class(VVTools_PT_VRCAnalysis)
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_custom_menu.menu_draw)
+# Class list, add new classes here so they (un)register properly...
 
+classes = [
+    VVTools_OT_SmoothRigXfer,
+    VVTools_OT_VisGeoShapeKey,
+    VVTools_OT_RenameDataBlocks,
+    VVTools_OT_SetModifiersVisibility,
+    VVTools_OT_MergeToActiveBone,
+    VVTools_OT_ReloadTexturesOfSelected,
+    VVTools_OT_VRCAnalyse,
+    VVTools_PT_General,
+    VVTools_PT_Mesh_Operators,
+    VVTools_PT_Rigging,
+    VVTools_PT_Materials,
+    VVTools_PT_VRCAnalysis,
+    TOPBAR_MT_custom_menu,
+    TOPBAR_MT_VV_General,
+    TOPBAR_MT_VV_Materials,
+    TOPBAR_MT_VV_Mesh_Operators,
+    TOPBAR_MT_VV_Rigging,
+    TOPBAR_MT_VV_VRC,
+]
+
+def register():
+    for cls in classes:
+            bpy.utils.register_class(cls)
+    bpy.types.TOPBAR_MT_editor_menus.append(TOPBAR_MT_custom_menu.menu_draw)
+    bpy.types.Scene.vv_tools_source_object = bpy.props.PointerProperty(
+        name="Source Object",
+        type=bpy.types.Object,
+        description="The source object to transfer vertex group data from"
+    )
 
 def unregister():
-    bpy.utils.unregister_class(VVTools_OT_VisGeoShapeKey)
-    bpy.utils.unregister_class(VVTools_OT_RenameDataBlocks)
-    bpy.utils.unregister_class(VVTools_OT_SetModifiersVisibility)
-    bpy.utils.unregister_class(VVTools_OT_MergeToActiveBone)
-    bpy.utils.unregister_class(VVTools_OT_ReloadTexturesOfSelected)
-    bpy.utils.unregister_class(VVTools_OT_VRCAnalyse)
-    bpy.utils.unregister_class(VVTools_PT_General)
-    bpy.utils.unregister_class(VVTools_PT_Mesh_Operators)
-    bpy.utils.unregister_class(VVTools_PT_Rigging)
-    bpy.utils.unregister_class(VVTools_PT_Materials)
-    bpy.utils.unregister_class(VVTools_PT_VRCAnalysis)
     bpy.types.TOPBAR_MT_editor_menus.remove(TOPBAR_MT_custom_menu.menu_draw)
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-
+    del bpy.types.Scene.vv_tools_source_object
+    
 if __name__ == "__main__":
     register()
 
-# internal tag applied to operators since we draw a top menu and submenu, things will be categorized in search nicely
