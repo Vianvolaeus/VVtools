@@ -19,7 +19,11 @@ Operators can also be called via the search function (F3) - using 'vv' in the se
 ### Visual Geo to Shape
 
 Takes a Visual Geometry to Mesh snapshot of the selected object and merges it into the active object.
-This is mainly useful for keeping active modifiers while using them to deform geometry. It is effectively similar to the 'Save As Shape Key' function found in some modifiers, but for everything active on the mesh. Quite literally it is Visual Geometry to Shape Key.
+
+This is mainly useful for keeping active modifiers while using them to deform geometry. 
+
+It is effectively similar to the 'Save As Shape Key' function found in some modifiers, but for everything active on the mesh. 
+Quite literally it is Visual Geometry to Shape Key.
 
 Obviously, since it is shapekeys, you cannot use modifiers that change vertex count / poly count etc, so not all modifiers will work. 
 
@@ -31,20 +35,25 @@ Mainly useful after using Visual Geo to Shape operator above, but also good for 
 
 ### Object Name Data Block Rename
 
-Renames the Data Block of the associated object using the Object name of the active object(s). 
+Renames the Data Block of the associated object using the Object name of the active object(s).
+
 This is mainly used for cleanup for exporting assets etc. No more 'Cube.003', etc - this operator takes the Object name to change that. 
 
 ### Merge Bones to Active
 Pose Mode operator used to merge down / dissolve bones *with their weights* down to an active bone.
+
 This can be useful for reducing hair chains in characters, dissolving twist bones, things like that. 
 
 ### Reload Textures of Selected
-Will reload the textures of every currently selected object. Useful for external texture authorship (eg. Substance) - will refresh Image Texture nodes if they have been altered in the original directory. 
+Will reload the textures of every currently selected object. 
+
+Useful for external texture authorship (eg. Substance) - will refresh Image Texture nodes if they have been altered in the original directory. 
 
 ## VRChat Operators
 
 ### VRC Analyse
 A WIP analysis tool for VRChat avatars. It analyses the current selected objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
+
 Currently, this checks the following:
 
 - Polygons
