@@ -115,7 +115,7 @@ class VVTools_OT_SmoothRigXfer(Operator):
     bl_idname = "vv_tools.smooth_rig_xfer"
     bl_label = "Smooth Rig Transfer"
     bl_description = "Transfer vertex weights from active object to selected objects with smoothing"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL',}
 
     def draw(self, context):
         layout = self.layout
