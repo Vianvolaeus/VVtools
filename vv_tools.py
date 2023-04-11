@@ -325,7 +325,8 @@ def merge_vertex_weights_and_remove_bones(context):
         for vertex_index, weights in vertex_weights.items():
             normalized_weights = normalize_weights(weights)
             total_weight = sum(normalized_weights.values())
-            active_group.add([vertex_index], total_weight, 'REPLACE')
+            if total_weight > 0:
+                active_group.add([vertex_index], total_weight, 'ADD')
 
         bpy.ops.object.mode_set(mode='EDIT')
         for bone in selected_bones:
@@ -342,6 +343,8 @@ def merge_vertex_weights_and_remove_bones(context):
         mesh_obj.data.update()
 
     return {"FINISHED"}, ""
+
+
 
 
 
