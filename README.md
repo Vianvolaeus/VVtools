@@ -18,15 +18,13 @@ Operators can also be called via the search function (F3) - using 'vv' in the se
 
 ### Visual Geo to Shape
 
-Takes a Visual Geometry to Mesh snapshot of the selected object and merges it into the active object.
-
-This is mainly useful for keeping active modifiers while using them to deform geometry. 
-
-It is effectively similar to the 'Save As Shape Key' function found in some modifiers, but for everything active on the mesh. 
+Takes a Visual Geometry to Mesh snapshot of the selected object and merges it into the active object.  
+This is mainly useful for keeping active modifiers while using them to deform geometry.   
+It is effectively similar to the 'Save As Shape Key' function found in some modifiers, but for everything active on the mesh.  
 Quite literally it is Visual Geometry to Shape Key.
 
-Obviously, since it is shapekeys, you cannot use modifiers that change vertex count / poly count etc, so not all modifiers will work. 
-<br>
+<!> Since it involves shapekeys, you cannot use modifiers that change vertex count / poly count etc, so not all modifiers will work. 
+
 ### Toggle Modifiers Visibility
 
 Switches state of modifier enable in both Viewport and Render mode at the same time. It is a bool on/off switch, so will enable and disable *every* modifier on the active object(s). 
