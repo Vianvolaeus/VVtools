@@ -276,17 +276,11 @@ class VVTools_OT_RenameDataBlocks(Operator):
 # Merge Bones to Active
 ## Merges weights of selected bones to the active bone, and removes the 'empty' bones. 
 
-def delete_bones(obj, bones):
-    bpy.ops.object.mode_set(mode='POSE')
-    
-    for bone in bones:
-        bpy.context.active_bone.select = False
-        bone.bone.select = True
-    
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.armature.delete()
-    bpy.ops.object.mode_set(mode='POSE')
-
+def normalize_weights(weights):
+    total_weight = sum(weights.values())
+    if total_weight == 0:
+        return weights
+    return {key: value / total_weight for key, value in weights.items()}
 
 def merge_vertex_weights_and_remove_bones(context):
     obj = context.active_object
@@ -305,34 +299,50 @@ def merge_vertex_weights_and_remove_bones(context):
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Find the mesh object associated with the armature
-    mesh_obj = None
-    for ob in context.scene.objects:
-        if ob.type == 'MESH' and ob.find_armature() == obj:
-            mesh_obj = ob
-            break
+    mesh_objects = [ob for ob in context.scene.objects if ob.type == 'MESH' and ob.find_armature() == obj]
 
-    if mesh_obj is None:
-        return {"ERROR"}, "No mesh object found with the active armature as its modifier"
+    if not mesh_objects:
+        return {"ERROR"}, "No mesh objects found with the active armature as their modifier"
 
-    for bone in selected_bones:
-        # Merge vertex weights
-        if bone.name in mesh_obj.vertex_groups:
-            source_group = mesh_obj.vertex_groups[bone.name]
-            active_group = mesh_obj.vertex_groups.get(active_bone.name, mesh_obj.vertex_groups.new(name=active_bone.name))
+    for mesh_obj in mesh_objects:
+        if active_bone.name not in mesh_obj.vertex_groups:
+            mesh_obj.vertex_groups.new(name=active_bone.name)
 
-            for vertex in mesh_obj.data.vertices:
-                try:
-                    weight = source_group.weight(vertex.index)
-                    active_group.add([vertex.index], weight, 'ADD')
-                except RuntimeError:
-                    pass
+        active_group = mesh_obj.vertex_groups[active_bone.name]
 
-            mesh_obj.vertex_groups.remove(source_group)
+        vertex_weights = {}
+        for bone in selected_bones:
+            if bone.name in mesh_obj.vertex_groups:
+                source_group = mesh_obj.vertex_groups[bone.name]
+                for vertex in mesh_obj.data.vertices:
+                    for group in vertex.groups:
+                        if group.group == source_group.index:
+                            if vertex.index not in vertex_weights:
+                                vertex_weights[vertex.index] = {bone.name: group.weight}
+                            else:
+                                vertex_weights[vertex.index][bone.name] = max(group.weight, vertex_weights[vertex.index].get(bone.name, 0))
 
-    delete_bones(obj, selected_bones)
+        for vertex_index, weights in vertex_weights.items():
+            normalized_weights = normalize_weights(weights)
+            total_weight = sum(normalized_weights.values())
+            active_group.add([vertex_index], total_weight, 'REPLACE')
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        for bone in selected_bones:
+            edit_bone = obj.data.edit_bones.get(bone.name)
+            if edit_bone is not None:
+                obj.data.edit_bones.remove(edit_bone)
+            if bone.name in mesh_obj.vertex_groups:
+                source_group = mesh_obj.vertex_groups[bone.name]
+                mesh_obj.vertex_groups.remove(source_group)
+
+    bpy.ops.object.mode_set(mode='POSE')
+
+    for mesh_obj in mesh_objects:
+        mesh_obj.data.update()
 
     return {"FINISHED"}, ""
+
 
 
 
@@ -518,7 +528,7 @@ class VVTools_PT_Rigging(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.mode == 'OBJECT'
+        return context.mode in {'OBJECT', 'EDIT_ARMATURE', 'POSE'}
 
     def draw(self, context):
         layout = self.layout
