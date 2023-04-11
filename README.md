@@ -26,7 +26,7 @@ It is effectively similar to the 'Save As Shape Key' function found in some modi
 Quite literally it is Visual Geometry to Shape Key.
 
 Obviously, since it is shapekeys, you cannot use modifiers that change vertex count / poly count etc, so not all modifiers will work. 
-
+<br>
 ### Toggle Modifiers Visibility
 
 Switches state of modifier enable in both Viewport and Render mode at the same time. It is a bool on/off switch, so will enable and disable *every* modifier on the active object(s). 
