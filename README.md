@@ -14,7 +14,9 @@ Haven't tested versions except 3.0+, but *should* be 2.8+ compatible
 The addon currently lives in a top header menu, as well as the side panel. 
 Operators can also be called via the search function (F3) - using 'vv' in the search should bring everything up!
 
-## General Operators
+# Operator Categories
+
+## General
 
 ### Visual Geo to Shape
 
@@ -24,6 +26,8 @@ It is effectively similar to the 'Save As Shape Key' function found in some modi
 Quite literally it is Visual Geometry to Shape Key.
 
 <!> Since it involves shapekeys, you cannot use modifiers that change vertex count / poly count etc, so not all modifiers will work. 
+
+## Mesh Operators
 
 ### Toggle Modifiers Visibility
 
@@ -37,30 +41,44 @@ Renames the Data Block of the associated object using the Object name of the act
 
 This is mainly used for cleanup for exporting assets etc. No more 'Cube.003', etc - this operator takes the Object name to change that. 
 
+## Rigging
+
 ### Merge Bones to Active
 Pose Mode operator used to merge down / dissolve bones *with their weights* down to an active bone.
 
 This can be useful for reducing hair chains in characters, dissolving twist bones, things like that. 
+
+### Smooth Rig Transfer
+
+Mainly useful for clothing, this applies a Data Transfer modifier to transfer vertex weights from the Source Object, smooths them out while retaining the area of vertex weight projection, and then parents the selected objects to the Armature of the Source Object.
+
+Personal use case: Taking unrigged clothing and projecting weights for a rigged body Source Object
+
+## Materials
 
 ### Reload Textures of Selected
 Will reload the textures of every currently selected object. 
 
 Useful for external texture authorship (eg. Substance) - will refresh Image Texture nodes if they have been altered in the original directory. 
 
-## VRChat Operators
+## VRChat (VRC)
 
 ### VRC Analyse
-A WIP analysis tool for VRChat avatars. It analyses the current selected objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
+A WIP analysis tool for VRChat avatars. It analyses the current *selected* objects against relevant / compatible PC [VRchat Avatar Performance Limits](https://docs.vrchat.com/docs/avatar-performance-ranking-system#pc-limits).
+
+Running the VRC Analyse again with a new selection, or updated data, will report new analysis.
+
+Since the analyser runs on *selected* objects, you can select a single / multiple objects to see what their contributions are to the Performance Rank individually by analysing them individually. 
 
 Currently, this checks the following:
 
-- Polygons
-- Texture Memory
+- Polygons (Tris)
+- Texture Memory (EXPERIMENTAL)
 - Skinned Meshes 
 - Meshes
 - Material Slots
 - Bones
 
-If something is pushing the selected objects into the Very Poor Performance Rank, the UI will attempt to report what it is, with a mild suggestion on a fix. 
-Currently some modifier interactions are analysed incorrectly, so some stats may be incorrect. 
-NOTE: Currently, the performance stats are hard-coded, so if there are updates to them, they could be incorrect if the code is not changed accordingly. 
+Texture Memory should be considered experimental, and assumes a rough calcuation for DXT5 compression rather than RGBA 32bit. It should still serve as a decent estimate. 
+
+If the Performance Rank is detected as Very Poor, a warning will be displayed. 
