@@ -70,7 +70,21 @@ class TOPBAR_MT_VV_General(bpy.types.Menu):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.vp_wireframe")
+        
+
+class TOPBAR_MT_VV_Cameras(Panel):
+    bl_label = "Cameras"
+    bl_idname = "TOPBAR_MT_VV_Cameras"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'VV'
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.add_viewport_camera")
+        row = layout.row(align=True)
+        row.operator("vv_tools.switch_to_previous_camera", text="Prev")
+        row.operator("vv_tools.switch_to_next_camera", text="Next")
  
 class TOPBAR_MT_VV_Materials(bpy.types.Menu):
     bl_label = "Materials"
@@ -109,6 +123,48 @@ class TOPBAR_MT_VV_VRC(bpy.types.Menu):
 classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
+
+# Camera Switch
+## Two functions to cycle between cameras
+
+class VVTools_OT_SwitchToNextCamera(Operator):
+    bl_idname = "vv_tools.switch_to_next_camera"
+    bl_label = "Next Camera"
+    bl_description = "Switch to the next camera in the scene."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        cameras = [obj for obj in context.scene.objects if obj.type == 'CAMERA']
+        if not cameras:
+            self.report({'WARNING'}, "No cameras found in the scene")
+            return {'CANCELLED'}
+
+        current_camera = context.scene.camera
+        idx = cameras.index(current_camera)
+        next_idx = (idx + 1) % len(cameras)
+        context.scene.camera = cameras[next_idx]
+
+        return {'FINISHED'}
+
+
+class VVTools_OT_SwitchToPreviousCamera(Operator):
+    bl_idname = "vv_tools.switch_to_previous_camera"
+    bl_label = "Previous Camera"
+    bl_description = "Switch to the previous camera in the scene."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        cameras = [obj for obj in context.scene.objects if obj.type == 'CAMERA']
+        if not cameras:
+            self.report({'WARNING'}, "No cameras found in the scene")
+            return {'CANCELLED'}
+
+        current_camera = context.scene.camera
+        idx = cameras.index(current_camera)
+        prev_idx = (idx - 1) % len(cameras)
+        context.scene.camera = cameras[prev_idx]
+
+        return {'FINISHED'}
 
 # Add Viewport Camera
 ## Adds a passepartout camera using the current viewport position, adds a DoF Empty and projects it towards the nearest object the camera is pointing at
@@ -607,7 +663,21 @@ class VVTools_PT_General(Panel):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.vp_wireframe")
+
+
+class VVTools_PT_Cameras(Panel):
+    bl_label = "VV Tools - Cameras"
+    bl_idname = "VVTOOLS_PT_Cameras"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'VV'
+
+    def draw(self, context):
+        layout = self.layout
         layout.operator("vv_tools.add_viewport_camera")
+        row = layout.row(align=True)
+        row.operator("vv_tools.switch_to_previous_camera", text="Prev")
+        row.operator("vv_tools.switch_to_next_camera", text="Next")
 
 class VVTools_PT_Mesh_Operators(Panel):
     bl_idname = "VV_TOOLS_PT_mesh_operators"
@@ -623,6 +693,7 @@ class VVTools_PT_Mesh_Operators(Panel):
 
 class VVTools_PT_Rigging(Panel):
     bl_idname = "VV_TOOLS_PT_rigging"
+    bl_idname = "VV_TOOLS_PT_rigging"
     bl_label = "VV Tools - Rigging"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -635,6 +706,7 @@ class VVTools_PT_Rigging(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.separator()
         layout.operator("vv_tools.smooth_rig_xfer")
         layout.prop(context.scene, "vv_tools_source_object", text="Source Object")
 
@@ -694,6 +766,8 @@ class VVTools_PT_VRCAnalysis(Panel):
 # Class list, add new classes here so they (un)register properly...
 
 classes = [
+    VVTools_OT_SwitchToNextCamera,
+    VVTools_OT_SwitchToPreviousCamera,
     VVTools_OT_AddViewportCamera,
     VVTools_OT_ViewportWireframe,
     VVTools_OT_SmoothRigXfer,
@@ -704,12 +778,14 @@ classes = [
     VVTools_OT_ReloadTexturesOfSelected,
     VVTools_OT_VRCAnalyse,
     VVTools_PT_General,
+    VVTools_PT_Cameras,
     VVTools_PT_Mesh_Operators,
     VVTools_PT_Rigging,
     VVTools_PT_Materials,
     VVTools_PT_VRCAnalysis,
     TOPBAR_MT_custom_menu,
     TOPBAR_MT_VV_General,
+    TOPBAR_MT_VV_Cameras, 
     TOPBAR_MT_VV_Materials,
     TOPBAR_MT_VV_Mesh_Operators,
     TOPBAR_MT_VV_Rigging,
