@@ -41,7 +41,7 @@ It also sets up Depth of Field with a few functions:
 
 - Enables DoF (with fStop1.2)
 - Adds an Empty object as a DoF object, and parents it to camera  
-- Raycasts this DoF Object to nearest surface from center of camera frame
+- Raycasts this DoF Object to nearest surface from center of camera frame. If it misses, it'll be at origin. 
 - Enables DoF in Solid mode, so you can preview your DoF effect without a full render
 (You can tweak this DoF object manually afterwards, also, just move it as desired.)
 
