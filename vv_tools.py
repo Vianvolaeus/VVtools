@@ -702,8 +702,9 @@ class VVTools_PT_Rigging(Panel):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
         layout.separator()
-        layout.operator("vv_tools.smooth_rig_xfer")
-        layout.prop(context.scene, "vv_tools_source_object", text="Source Object")
+        box = layout.box()
+        box.operator("vv_tools.smooth_rig_xfer")
+        box.prop(context.scene, "vv_tools_source_object", text="Source Object")
 
 
 class VVTools_PT_Materials(Panel):
