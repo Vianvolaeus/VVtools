@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 5, 2),
+    "version": (0, 5, 4),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -91,6 +91,8 @@ class TOPBAR_MT_VV_Materials(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
+        layout.operator("vv_tools.remove_unused_materials")
+
 
 class TOPBAR_MT_VV_Mesh_Operators(bpy.types.Menu):
     bl_label = "Mesh Operators"
@@ -121,6 +123,51 @@ class TOPBAR_MT_VV_VRC(bpy.types.Menu):
 classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
+
+# Remove Unused Materials
+## Looks at object selection and removes materials that are not in use / assigned to any vertex. Useful for material slot cleanup. 
+
+class VVTools_OT_RemoveUnusedMaterials(Operator):
+    bl_idname = "vv_tools.remove_unused_materials"
+    bl_label = "Remove Unused Materials"
+    bl_description = "Remove materials that aren't being used by any vertex on objects."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    warning_shown = False
+
+    def remove_unused_materials(self, obj):
+        used_materials = set()
+
+        # Collect used materials
+        for poly in obj.data.polygons:
+            used_materials.add(poly.material_index)
+
+        # Remove unused materials
+        for i, mat_slot in reversed(list(enumerate(obj.material_slots))):
+            if i not in used_materials:
+                obj.active_material_index = i
+                bpy.ops.object.material_slot_remove({'object': obj})
+
+    def execute(self, context):
+        for obj in bpy.context.selected_objects:
+            if obj.type == 'MESH':
+                self.remove_unused_materials(obj)
+
+        self.warning_shown = False
+        self.report({'INFO'}, "Materials removed.")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        self.warning_shown = True
+        return context.window_manager.invoke_props_dialog(self, width=400)
+
+    def draw(self, context):
+        if self.warning_shown:
+            layout = self.layout
+            col = layout.column()
+            col.label(text="Removing materials that aren't being used by any vertex on objects.")
+            col.label(text="If you would like to retain the materials in the Blender file,")
+            col.label(text="consider adding a Fake User (Shield Icon) to them first.")
 
 # Camera Switch
 ## Two functions to cycle between cameras
@@ -717,6 +764,8 @@ class VVTools_PT_Materials(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
+        layout.operator("vv_tools.remove_unused_materials")
+
 
 class VVTools_PT_VRCAnalysis(Panel):
     bl_idname = "VV_TOOLS_PT_vrc_analysis"
@@ -762,6 +811,7 @@ class VVTools_PT_VRCAnalysis(Panel):
 # Class list, add new classes here so they (un)register properly...
 
 classes = [
+    VVTools_OT_RemoveUnusedMaterials,
     VVTools_OT_SwitchToNextCamera,
     VVTools_OT_SwitchToPreviousCamera,
     VVTools_OT_AddViewportCamera,
