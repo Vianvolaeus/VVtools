@@ -52,6 +52,7 @@ class TOPBAR_MT_custom_menu(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.menu("TOPBAR_MT_VV_General")
+        layout.menu("TOPBAR_MT_VV_Cameras")
         layout.menu("TOPBAR_MT_VV_Materials")
         layout.menu("TOPBAR_MT_VV_Mesh_Operators")
         layout.menu("TOPBAR_MT_VV_Rigging")
@@ -72,12 +73,9 @@ class TOPBAR_MT_VV_General(bpy.types.Menu):
         layout.operator("vv_tools.vp_wireframe")
         
 
-class TOPBAR_MT_VV_Cameras(Panel):
+class TOPBAR_MT_VV_Cameras(bpy.types.Menu):
     bl_label = "Cameras"
     bl_idname = "TOPBAR_MT_VV_Cameras"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'VV'
 
     def draw(self, context):
         layout = self.layout
@@ -237,9 +235,6 @@ class VVTools_OT_AddViewportCamera(Operator):
         viewport_camera_collection.objects.link(empty)
 
         return {'FINISHED'}
-
-
-
 
 
 
