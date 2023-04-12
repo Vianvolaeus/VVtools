@@ -54,7 +54,6 @@ The operator will add Viewport Cameras to a Viewport Camera collection, to keep 
 Side by side buttons that switch which cameras is active in your scene. 
 New cameras that are added will still be compatible with this function, simply linearly runs though cameras as you press the button. 
 
-
 ## Mesh Operators
 
 ### Visual Geo to Shape
