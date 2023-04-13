@@ -1,7 +1,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 5, 0),
+    "version": (0, 5, 4),
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -15,10 +15,13 @@ import os
 import textwrap
 import re
 import json
+import math
+import mathutils
 
 from bpy.types import Panel, Operator, PropertyGroup
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty
 from bpy.utils import previews
+from mathutils import Vector
 
 # Register icons, incomplete, but not code-breaking. Finish later
 
@@ -51,6 +54,7 @@ class TOPBAR_MT_custom_menu(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.menu("TOPBAR_MT_VV_General")
+        layout.menu("TOPBAR_MT_VV_Cameras")
         layout.menu("TOPBAR_MT_VV_Materials")
         layout.menu("TOPBAR_MT_VV_Mesh_Operators")
         layout.menu("TOPBAR_MT_VV_Rigging")
@@ -68,6 +72,19 @@ class TOPBAR_MT_VV_General(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
+        layout.operator("vv_tools.vp_wireframe")
+        
+
+class TOPBAR_MT_VV_Cameras(bpy.types.Menu):
+    bl_label = "Cameras"
+    bl_idname = "TOPBAR_MT_VV_Cameras"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_viewport_camera")
+        row = layout.row(align=True)
+        row.operator("vv_tools.switch_to_previous_camera", text="Prev")
+        row.operator("vv_tools.switch_to_next_camera", text="Next")
  
 class TOPBAR_MT_VV_Materials(bpy.types.Menu):
     bl_label = "Materials"
@@ -76,6 +93,8 @@ class TOPBAR_MT_VV_Materials(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
+        layout.operator("vv_tools.remove_unused_materials")
+
 
 class TOPBAR_MT_VV_Mesh_Operators(bpy.types.Menu):
     bl_label = "Mesh Operators"
@@ -106,6 +125,231 @@ class TOPBAR_MT_VV_VRC(bpy.types.Menu):
 classes = (TOPBAR_MT_custom_menu, TOPBAR_MT_VV_General, TOPBAR_MT_VV_Materials, TOPBAR_MT_VV_Mesh_Operators, TOPBAR_MT_VV_Rigging, TOPBAR_MT_VV_VRC)
 
 # Operators below. Probably should sort these out into some logical order, or into categories if possible
+
+# Remove Unused Materials
+## Looks at object selection and removes materials that are not in use / assigned to any vertex. Useful for material slot cleanup. 
+
+class VVTools_OT_RemoveUnusedMaterials(Operator):
+    bl_idname = "vv_tools.remove_unused_materials"
+    bl_label = "Remove Unused Materials"
+    bl_description = "Remove materials that aren't being used by any vertex on objects."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    warning_shown = False
+
+    def remove_unused_materials(self, obj):
+        used_materials = set()
+
+        # Collect used materials
+        for poly in obj.data.polygons:
+            used_materials.add(poly.material_index)
+
+        # Remove unused materials
+        for i, mat_slot in reversed(list(enumerate(obj.material_slots))):
+            if i not in used_materials:
+                obj.active_material_index = i
+                bpy.ops.object.material_slot_remove({'object': obj})
+
+    def execute(self, context):
+        for obj in bpy.context.selected_objects:
+            if obj.type == 'MESH':
+                self.remove_unused_materials(obj)
+
+        self.warning_shown = False
+        self.report({'INFO'}, "Materials removed.")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        self.warning_shown = True
+        return context.window_manager.invoke_props_dialog(self, width=400)
+
+    def draw(self, context):
+        if self.warning_shown:
+            layout = self.layout
+            col = layout.column()
+            col.label(text="Removing materials that aren't being used by any vertex on objects.")
+            col.label(text="If you would like to retain the materials in the Blender file,")
+            col.label(text="consider adding a Fake User (Shield Icon) to them first.")
+
+# Camera Switch
+## Two functions to cycle between cameras
+
+class VVTools_OT_SwitchToNextCamera(Operator):
+    bl_idname = "vv_tools.switch_to_next_camera"
+    bl_label = "Next Camera"
+    bl_description = "Switch to the next camera in the scene."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        cameras = [obj for obj in context.scene.objects if obj.type == 'CAMERA']
+        if not cameras:
+            self.report({'WARNING'}, "No cameras found in the scene")
+            return {'CANCELLED'}
+
+        current_camera = context.scene.camera
+        idx = cameras.index(current_camera)
+        next_idx = (idx + 1) % len(cameras)
+        context.scene.camera = cameras[next_idx]
+
+        return {'FINISHED'}
+
+
+class VVTools_OT_SwitchToPreviousCamera(Operator):
+    bl_idname = "vv_tools.switch_to_previous_camera"
+    bl_label = "Previous Camera"
+    bl_description = "Switch to the previous camera in the scene."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    def execute(self, context):
+        cameras = [obj for obj in context.scene.objects if obj.type == 'CAMERA']
+        if not cameras:
+            self.report({'WARNING'}, "No cameras found in the scene")
+            return {'CANCELLED'}
+
+        current_camera = context.scene.camera
+        idx = cameras.index(current_camera)
+        prev_idx = (idx - 1) % len(cameras)
+        context.scene.camera = cameras[prev_idx]
+
+        return {'FINISHED'}
+
+# Add Viewport Camera
+## Adds a passepartout camera using the current viewport position, adds a DoF Empty and projects it towards the nearest object the camera is pointing at
+
+import bpy
+from bpy.types import Operator
+from mathutils import Vector
+
+class VVTools_OT_AddViewportCamera(Operator):
+    bl_idname = "vv_tools.add_viewport_camera"
+    bl_label = "Add Viewport Camera"
+    bl_description = "Add a new camera named 'Viewport Camera', set it as active, align it to the current viewport view, and set up an Empty as its Depth of Field object."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.area.type == 'VIEW_3D' and context.mode == 'OBJECT'
+
+    def execute(self, context):
+    
+        # Deselect all objects
+        bpy.ops.object.select_all(action='DESELECT')
+
+        # Change the view from camera view to a regular 3D view
+        for space in context.area.spaces:
+            if space.type == 'VIEW_3D':
+                space.region_3d.view_perspective = 'PERSP'
+    
+        # Create a new camera and set it as the active camera
+        bpy.ops.object.camera_add()
+        camera = bpy.context.active_object
+        camera.name = "Viewport Camera.001" # Add .001 suffix so empty naming doesn't break later and result in off-by-one on the initial camera
+        bpy.context.scene.camera = camera
+
+        # Set camera passepartout
+        camera.data.passepartout_alpha = 1
+
+        # Align the camera to the current viewport view
+        bpy.ops.view3d.camera_to_view()
+
+        # Set the camera type based on the viewport perspective
+        rv3d = context.space_data.region_3d
+        is_persp = rv3d.window_matrix[3][3] == 0 # is_perspective was producing weird results, and we can't is_orthographic_side_view doesn't account for user orthographic view so gotta do this
+        if is_persp:
+            camera.data.type = 'PERSP'
+            camera.data.dof.use_dof = True # Enable DoF for perspective cams only, since orthos obviously blur the fuck out of everything
+        else:
+            camera.data.type = 'ORTHO'
+            camera.data.dof.use_dof = False
+
+        # Set the orthographic scale of the camera to match the viewport zoom level
+        if camera.data.type == 'ORTHO':
+            camera.data.ortho_scale = context.space_data.region_3d.view_distance
+
+        # Create a new Empty object
+        bpy.ops.object.empty_add(type='PLAIN_AXES')
+        empty = bpy.context.active_object
+        empty.name = "DoF Empty"
+
+        # Set depth of field settings. actual DoF is handled 
+        camera.data.dof.aperture_fstop = 1.2
+        camera.data.dof.focus_object = empty
+
+        # Parent the Empty object to the camera
+        bpy.ops.object.select_all(action='DESELECT')
+        empty.select_set(True)
+        camera.select_set(True)
+        context.view_layer.objects.active = camera
+        bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+
+        # Set suffix of empty (.XXX) to match it's parent camera, or it becomes 'DoF Empty'
+        
+        suffix_match = re.search(r'\.\d{3}$', camera.name)
+        if suffix_match:
+            suffix = suffix_match.group(0)
+        else:
+            suffix = ''
+
+        # Set the name of the empty based on the parent camera suffix
+        empty.name = f"DoF Empty{suffix}"
+        
+        # Set the name of the empty based on the parent camera name
+        if 'Viewport Camera' in camera.name:
+            empty.name = camera.name.replace('Viewport Camera', 'DoF Empty')
+        else:
+            empty.name = "DoF Empty"
+
+        # Project a ray from the camera to find the first face it touches
+        context = bpy.context
+        depsgraph = context.evaluated_depsgraph_get()
+
+        origin = camera.location
+        direction = camera.matrix_world.to_quaternion() @ Vector((0.0, 0.0, -1.0))
+        result, location, normal, index, obj, matrix = context.scene.ray_cast(depsgraph, origin, direction)
+
+        # Move the Empty object to the position of the first face touched by the projected ray
+        if result:
+            empty.location = location
+
+        # Move objects to the 'Viewport Camera' collection
+        coll_name = "Viewport Camera"
+        if coll_name not in bpy.data.collections:
+            viewport_camera_collection = bpy.data.collections.new(coll_name)
+            bpy.context.scene.collection.children.link(viewport_camera_collection)
+        else:
+            viewport_camera_collection = bpy.data.collections[coll_name]
+
+        # Move camera and empty to the collection
+        current_collection = camera.users_collection[0]
+        current_collection.objects.unlink(camera)
+        current_collection.objects.unlink(empty)
+        viewport_camera_collection.objects.link(camera)
+        viewport_camera_collection.objects.link(empty)
+        
+        # Enable Depth of Field in the Viewport for Solid mode, even if we're in lookdev etc. 
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.spaces[0].shading.use_dof = True
+
+        return {'FINISHED'}
+
+
+# Viewport Wireframe
+## Simple global wireframe toggle for the viewport
+
+class VVTools_OT_ViewportWireframe(Operator):
+    bl_idname = "vv_tools.vp_wireframe"
+    bl_label = "Viewport Wireframe"
+    bl_description = "Toggles global wireframe in the viewport."
+    bl_options = {'REGISTER', 'UNDO', 'INTERNAL',}
+    
+    def execute(self, context):
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D':
+                        space.overlay.show_wireframes = not space.overlay.show_wireframes
+        return {'FINISHED'}
 
 # Smoothed Rigging Xfer from Active
 ## Uses Data Transfer modifier to project interpolated face vertex groups to selected meshes, then parents them to the Armature active on the object it took it's data from
@@ -509,6 +753,22 @@ class VVTools_PT_General(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
+        layout.operator("vv_tools.vp_wireframe")
+
+
+class VVTools_PT_Cameras(Panel):
+    bl_label = "VV Tools - Cameras"
+    bl_idname = "VVTOOLS_PT_Cameras"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'VV'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("vv_tools.add_viewport_camera")
+        row = layout.row(align=True)
+        row.operator("vv_tools.switch_to_previous_camera", text="Prev")
+        row.operator("vv_tools.switch_to_next_camera", text="Next")
 
 class VVTools_PT_Mesh_Operators(Panel):
     bl_idname = "VV_TOOLS_PT_mesh_operators"
@@ -524,6 +784,7 @@ class VVTools_PT_Mesh_Operators(Panel):
 
 class VVTools_PT_Rigging(Panel):
     bl_idname = "VV_TOOLS_PT_rigging"
+    bl_idname = "VV_TOOLS_PT_rigging"
     bl_label = "VV Tools - Rigging"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -536,8 +797,10 @@ class VVTools_PT_Rigging(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
-        layout.operator("vv_tools.smooth_rig_xfer")
-        layout.prop(context.scene, "vv_tools_source_object", text="Source Object")
+        layout.separator()
+        box = layout.box()
+        box.operator("vv_tools.smooth_rig_xfer")
+        box.prop(context.scene, "vv_tools_source_object", text="Source Object")
 
 
 class VVTools_PT_Materials(Panel):
@@ -550,6 +813,8 @@ class VVTools_PT_Materials(Panel):
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
+        layout.operator("vv_tools.remove_unused_materials")
+
 
 class VVTools_PT_VRCAnalysis(Panel):
     bl_idname = "VV_TOOLS_PT_vrc_analysis"
@@ -595,6 +860,11 @@ class VVTools_PT_VRCAnalysis(Panel):
 # Class list, add new classes here so they (un)register properly...
 
 classes = [
+    VVTools_OT_RemoveUnusedMaterials,
+    VVTools_OT_SwitchToNextCamera,
+    VVTools_OT_SwitchToPreviousCamera,
+    VVTools_OT_AddViewportCamera,
+    VVTools_OT_ViewportWireframe,
     VVTools_OT_SmoothRigXfer,
     VVTools_OT_VisGeoShapeKey,
     VVTools_OT_RenameDataBlocks,
@@ -603,12 +873,14 @@ classes = [
     VVTools_OT_ReloadTexturesOfSelected,
     VVTools_OT_VRCAnalyse,
     VVTools_PT_General,
+    VVTools_PT_Cameras,
     VVTools_PT_Mesh_Operators,
     VVTools_PT_Rigging,
     VVTools_PT_Materials,
     VVTools_PT_VRCAnalysis,
     TOPBAR_MT_custom_menu,
     TOPBAR_MT_VV_General,
+    TOPBAR_MT_VV_Cameras, 
     TOPBAR_MT_VV_Materials,
     TOPBAR_MT_VV_Mesh_Operators,
     TOPBAR_MT_VV_Rigging,
