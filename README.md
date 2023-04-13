@@ -35,8 +35,9 @@ Simply enables wireframe overlay in the viewport.
 ## Cameras
 
 ### Add Viewport Camera
-Adds a camera using the current viewport as it's view transform.
-Passepartout (black border) is set as 1, as a personal preference.  (This may be exposed later, but for now it's faster hardcoded)
+Adds a camera using the current viewport as it's view transform, and the view mode (Perspective / Ortho) of the viewport.   
+Passepartout (black border) is set as 1, as a personal preference.  
+(This may be exposed later, but for now it's faster hardcoded)  
 Generated camera will take Perspective or Orthographic into account based on your viewport when the operator is run. 
 
 It also sets up Depth of Field with a few functions: 
