@@ -27,7 +27,7 @@ Renames the Data Block of the associated object using the Object name of the act
 
 This is mainly used for cleanup for exporting assets etc. No more 'Cube.003', etc - this operator takes the Object name to change that. 
 
-## Viewport Wireframe
+### Viewport Wireframe
 
 Mode agnostic wireframe toggle. 
 Simply enables wireframe overlay in the viewport. 
