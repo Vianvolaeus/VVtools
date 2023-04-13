@@ -1,4 +1,4 @@
-# operators/rigging.py
+# operators/riggingops.py
 
 import bpy
 from bpy.types import Operator
