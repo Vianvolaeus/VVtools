@@ -35,9 +35,12 @@ Simply enables wireframe overlay in the viewport.
 ## Cameras
 
 ### Add Viewport Camera
-Adds a camera using the current viewport as it's view transform, and the view mode (Perspective / Ortho) of the viewport.   
+Adds a camera using the current viewport as it's view transform, and the view mode (Perspective / Ortho) of the viewport. 
+  
 Passepartout (black border) is set as 1, as a personal preference.  
+
 (This may be exposed later, but for now it's faster hardcoded)  
+
 Generated camera will take Perspective or Orthographic into account based on your viewport when the operator is run. 
 
 It also sets up Depth of Field with a few functions: 
@@ -45,7 +48,9 @@ It also sets up Depth of Field with a few functions:
 - Enables DoF (with fStop1.2) for perspective cams
 - Adds an Empty object as a DoF object, and parents it to camera  
 - Raycasts this DoF Object to nearest surface from center of camera frame. If it misses, it'll be at origin. 
-- Enables DoF in Solid mode, so you can preview your DoF effect without a full render
+- Enables DoF in Solid mode, so you can preview your DoF effect without a full render  
+
+
 (You can tweak this DoF object manually afterwards, also, just move it as desired.)
 
 The operator will add Viewport Cameras to a Viewport Camera collection, to keep things organised. 
