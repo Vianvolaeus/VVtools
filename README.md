@@ -6,7 +6,7 @@ Addon should be currently be considered experimental, in progress, incomplete.
 ![](https://github.com/Vianvolaeus/VVtools/blob/assets/vv_tools_header.jpg)
 
 ## Installation
-Download the latest release, and install the .py as usual for Blender addons. 
+Download the latest release, install the vv_tools.zip in the add-ons section of your Blender Preferences menu.  
  
 (Haven't tested versions except 3.0+, but *should* be 2.8+ compatible)
 
