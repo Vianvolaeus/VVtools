@@ -1,14 +1,9 @@
-# panels/meshoperatorspanel.py
-
 import bpy
-from bpy.types import Panel
+from bpy.types import Menu
 
-class VVTools_PT_Mesh_Operators(Panel):
-    bl_idname = "VV_TOOLS_PT_mesh_operators"
-    bl_label = "VV Tools - Mesh Operators"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "VV"
+class TOPBAR_MT_VV_Mesh_Operators(bpy.types.Menu):
+    bl_label = "Mesh Operators"
+    bl_idname = "TOPBAR_MT_VV_Mesh_Operators"
 
     def draw(self, context):
         layout = self.layout
@@ -16,7 +11,7 @@ class VVTools_PT_Mesh_Operators(Panel):
         layout.operator("vv_tools.set_modifiers_visibility")
 
 classes = [
-    VVTools_PT_Mesh_Operators,
+    TOPBAR_MT_VV_Mesh_Operators,
 ]
 
 def register():

@@ -1,15 +1,17 @@
 # operators/__init__.py
 
-from .rigging import (
-    VVTools_OT_MergeToActiveBone,
-    VVTools_OT_SmoothRigXfer,
+from . import camerasops
+from . import generalops
+from . import materialsops
+from . import meshoperatorsops
+from . import riggingops
+from . import vrcanalysisops
+
+classes = (
+    camerasops.classes
+    + generalops.classes
+    + materialsops.classes
+    + meshoperatorsops.classes
+    + riggingops.classes
+    + vrcanalysisops.classes
 )
-
-# add other imports from operator .py files later
-
-__all__ = [
-    "VVTools_OT_MergeToActiveBone",
-    "VVTools_OT_SmoothRigXfer",
-    # Add the names of any additional operator classes you want to import
-]
-

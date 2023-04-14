@@ -1,22 +1,17 @@
-# panels/generalpanel.py
-
 import bpy
-from bpy.types import Panel
+from bpy.types import Menu
 
-class VVTools_PT_General(Panel):
-    bl_idname = "VV_TOOLS_PT_General"
-    bl_label = "VV Tools - General"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "VV"
+class TOPBAR_MT_VV_General(bpy.types.Menu):
+    bl_label = "General"
+    bl_idname = "TOPBAR_MT_VV_General"
 
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.rename_data_blocks")
         layout.operator("vv_tools.vp_wireframe")
 
-classes = [ 
-    VVTools_PT_General,
+classes = [
+    TOPBAR_MT_VV_General,
 ]
 
 def register():

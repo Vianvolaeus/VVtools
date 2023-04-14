@@ -1,7 +1,7 @@
 # operators/riggingops.py
 
 import bpy
-from bpy.types import Operator
+from bpy.types import Operator, PropertyGroup
 
 # Merge Bones to Active
 ## Merges weights of selected bones to the active bone, and removes the 'empty' bones. 
@@ -159,3 +159,16 @@ class VVTools_OT_SmoothRigXfer(Operator):
             bpy.ops.object.mode_set(mode='OBJECT')
 
         return {'FINISHED'}
+
+classes = [
+    VVTools_OT_MergeToActiveBone,
+    VVTools_OT_SmoothRigXfer,
+]
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)

@@ -1,7 +1,11 @@
 # panels/vrcanalysispanel.py
 
 import bpy
+import json
+import re
+from ..operators.vrcanalysisops import performance_rank, performance_warning, analyze_selected_objects
 from bpy.types import Panel
+
 
 class VVTools_PT_VRCAnalysis(Panel):
     bl_idname = "VV_TOOLS_PT_vrc_analysis"
@@ -42,3 +46,15 @@ class VVTools_PT_VRCAnalysis(Panel):
             layout.label(text="Will run slow on first use!")
 
         layout.operator("vv_tools.vrc_analyse")
+
+classes = [
+    VVTools_PT_VRCAnalysis,
+]
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)

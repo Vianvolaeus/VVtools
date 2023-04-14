@@ -1,14 +1,9 @@
-# panels/cameraspanel.py
-
 import bpy
-from bpy.types import Panel
+from bpy.types import Menu
 
-class VVTools_PT_Cameras(Panel):
-    bl_label = "VV Tools - Cameras"
-    bl_idname = "VVTOOLS_PT_Cameras"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'VV'
+class TOPBAR_MT_VV_Cameras(bpy.types.Menu):
+    bl_label = "Cameras"
+    bl_idname = "TOPBAR_MT_VV_Cameras"
 
     def draw(self, context):
         layout = self.layout
@@ -17,8 +12,9 @@ class VVTools_PT_Cameras(Panel):
         row.operator("vv_tools.switch_to_previous_camera", text="Prev")
         row.operator("vv_tools.switch_to_next_camera", text="Next")
         
+
 classes = [
-    VVTools_PT_Cameras,
+    TOPBAR_MT_VV_Cameras,
 ]
 
 def register():

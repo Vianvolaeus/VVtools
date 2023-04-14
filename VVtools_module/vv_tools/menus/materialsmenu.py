@@ -1,22 +1,17 @@
-# panels/materialspanel.py
-
 import bpy
-from bpy.types import Panel
+from bpy.types import Menu
 
-class VVTools_PT_Materials(Panel):
-    bl_idname = "VV_TOOLS_PT_materials"
-    bl_label = "VV Tools - Materials"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "VV"
+class TOPBAR_MT_VV_Materials(bpy.types.Menu):
+    bl_label = "Materials"
+    bl_idname = "TOPBAR_MT_VV_Materials"
 
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.reload_textures_of_selected")
         layout.operator("vv_tools.remove_unused_materials")
-
+        
 classes = [
-    VVTools_PT_Materials,
+    TOPBAR_MT_VV_Materials,
 ]
 
 def register():

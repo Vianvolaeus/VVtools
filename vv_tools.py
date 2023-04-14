@@ -588,11 +588,6 @@ def merge_vertex_weights_and_remove_bones(context):
 
     return {"FINISHED"}, ""
 
-
-
-
-
-
 class VVTools_OT_MergeToActiveBone(Operator):
     bl_idname = "vv_tools.merge_to_active_bone"
     bl_label = "Merge Bones to Active"

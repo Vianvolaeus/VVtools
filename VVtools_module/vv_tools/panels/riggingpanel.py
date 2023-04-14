@@ -2,6 +2,7 @@
 
 import bpy
 from bpy.types import Panel
+from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty, EnumProperty
 
 class VVTools_PT_Rigging(Panel):
     bl_idname = "VV_TOOLS_PT_rigging"
@@ -21,4 +22,15 @@ class VVTools_PT_Rigging(Panel):
         layout.separator()
         box = layout.box()
         box.operator("vv_tools.smooth_rig_xfer")
-        box.prop(context.scene, "vv_tools_source_object", text="Source Object")
+
+classes = [
+    VVTools_PT_Rigging,
+]
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
