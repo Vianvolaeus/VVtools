@@ -123,3 +123,9 @@ Currently, this checks the following:
 Texture Memory should be considered experimental, and assumes a rough calcuation for DXT5 compression rather than RGBA 32bit. It should still serve as a decent estimate. 
 
 If the Performance Rank is detected as Very Poor, a warning will be displayed. 
+
+# Other features
+
+## Update check / auto update
+
+Thanks to the lovely [blender-addon-updater module by CGCookie](https://github.com/CGCookie/blender-addon-updater), the addon has update checks, versioning and user-enabled Auto-Update. 
