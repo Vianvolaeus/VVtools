@@ -23,6 +23,7 @@ import math
 import mathutils
 from . import addon_updater_ops
 
+
 from bpy.types import Panel, Operator, PropertyGroup, Object
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty, EnumProperty
 from bpy.utils import previews
@@ -185,28 +186,15 @@ classes = (
 
 def register():
     addon_updater_ops.register(bl_info)  # Keep this at top of register functions as per addon functionality recommendation
-    bpy.types.Scene.vv_tools_source_object = bpy.props.PointerProperty(
-        name="Source Object",
-        type=bpy.types.Object,
-        description="Object to transfer vertex weights from",
-    )
+=======
+def register():
+
 
     for cls in classes:
         bpy.utils.register_class(cls)
-
-    for module in modules:
-        print(f"Registering {module.__name__}")
-        module.register()
-
 
 def unregister():
     addon_updater_ops.unregister()  # Unregister first as per update functionality recommendation
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-
-    for module in reversed(modules):
-        print(f"Unregistering {module.__name__}")
-        module.unregister()
-
     del bpy.types.Scene.vv_tools_source_object
-
