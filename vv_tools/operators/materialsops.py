@@ -50,28 +50,25 @@ class VVTools_OT_RemoveUnusedMaterials(Operator):
             col.label(text="consider adding a Fake User (Shield Icon) to them first.")
 
 
-
-class VVTools_OT_ReloadTexturesOfSelected(bpy.types.Operator):
+class VVTools_OT_ReloadTexturesOfSelected(Operator):
     bl_idname = "vv_tools.reload_textures_of_selected"
     bl_label = "Reload Textures of Selected"
-    bl_description = "Reloads all textures of the materials assigned to the selected objects"
+    bl_description = "Reload all textures in materials of the selected objects. WARNING! Can run slow."
     bl_options = {"REGISTER", "UNDO", "INTERNAL"}
+
+    def reload_textures(self, objects):
+        for obj in objects:
+            for slot in obj.material_slots:
+                if slot.material:
+                    for node in slot.material.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            node.image.reload()
 
     def execute(self, context):
         selected_objects = context.selected_objects
-        textures_reloaded = 0
-
-        for obj in selected_objects:
-            if obj.type == "MESH":
-                for mat_slot in obj.material_slots:
-                    if mat_slot.material:
-                        for tex_slot in mat_slot.material.texture_slots:
-                            if tex_slot and tex_slot.texture:
-                                tex_slot.texture.reload()
-                                textures_reloaded += 1
-
-        self.report({"INFO"}, f"{textures_reloaded} textures reloaded")
+        self.reload_textures(selected_objects)
         return {"FINISHED"}
+
 
 
 # Class list for registration in __init__.py
