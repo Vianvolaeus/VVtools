@@ -3,7 +3,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 7, 3), # Button Attach operator
+    "version": (0, 7, 4), # Button Attach new features
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",

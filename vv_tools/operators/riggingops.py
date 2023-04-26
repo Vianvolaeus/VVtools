@@ -2,6 +2,7 @@
 
 import bpy
 import bmesh
+import math
 import mathutils
 from bpy.types import Operator, PropertyGroup
 from mathutils import Vector, Matrix
@@ -174,6 +175,26 @@ class VVTools_OT_ButtonAttach(Operator):
     bl_description = "Attach object to an Edit Mode selection, transferring weights."
     bl_options = {"REGISTER", "UNDO", "INTERNAL"}
 
+    normal_offset: bpy.props.FloatProperty(
+        name="Normal Offset",
+        description="Offset the target object along the normal direction",
+        default=0.0,
+        soft_min=-10.0,
+        soft_max=10.0,
+    )
+
+    rotation_offset: bpy.props.FloatVectorProperty(
+        name="Rotation Offset",
+        description="Offset the target object rotation",
+        default=(0.0, 0.0),
+        soft_min=-math.pi,  # -180 degrees in radians
+        soft_max=math.pi,  # 180 degrees in radians
+        step=1.0,  # 1 degree step, but displayed in radians internally
+        size=2,
+        subtype='EULER',
+        unit='ROTATION',
+    )
+
     weight_transfer_method: bpy.props.EnumProperty(
         name="Weight Method",
         description="Choose the method for transferring vertex weights",
@@ -182,14 +203,6 @@ class VVTools_OT_ButtonAttach(Operator):
             ("DATA_TRANSFER", "Data Transfer", "Transfer weights using Nearest Face Interpolated data transfer"),
         ],
         default="EXACT",
-    )
-
-    normal_offset: bpy.props.FloatProperty(
-        name="Normal Offset",
-        description="Offset the target object along the normal direction",
-        default=0.0,
-        soft_min=-10.0,
-        soft_max=10.0,
     )
 
     confirm: bpy.props.BoolProperty(
@@ -211,13 +224,16 @@ class VVTools_OT_ButtonAttach(Operator):
         target_obj.location = source_obj.matrix_world @ (vertex.co + vertex.normal * self.normal_offset)
         normal_world = source_obj.matrix_world.to_3x3() @ vertex.normal
         target_obj.rotation_euler = normal_world.to_track_quat('Z', 'Y').to_euler()
+        target_obj.rotation_euler.rotate_axis('X', self.rotation_offset[0])
+        target_obj.rotation_euler.rotate_axis('Y', self.rotation_offset[1])
 
     def snap_to_face(self, source_obj, target_obj, center_vert, normal):
         center = source_obj.matrix_world @ (center_vert.co + normal * self.normal_offset)
         target_obj.location = center
         normal_world = source_obj.matrix_world.to_3x3() @ normal
         target_obj.rotation_euler = normal_world.to_track_quat('Z', 'Y').to_euler()
-
+        target_obj.rotation_euler.rotate_axis('X', self.rotation_offset[0])
+        target_obj.rotation_euler.rotate_axis('Y', self.rotation_offset[1])
 
     def parent_to_armature(self, source_obj, target_obj):
         armature_obj = None
