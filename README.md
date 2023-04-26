@@ -80,6 +80,13 @@ Mainly useful after using Visual Geo to Shape operator above, but also good for 
 
 ## Rigging
 
+### Button Attach
+Snaps a selected object to an Edit Mode selection of an active object (vertex or face), and transfers either it's exact vertex weight, or uses a Data Transfer to project weights.  
+Also comes with some user functions (offset from surface)  
+This is useful for attaching static objects without weight painting to things that are already rigged.  
+Personal use case is attaching buttons or patches to clothing, or decals and other hard surface objects to body parts (robotic arms, etc)
+This will operator recieve more functionality in future. 
+
 ### Merge Bones to Active
 Pose Mode operator used to merge down / dissolve bones *with their weights* down to an active bone.
 
@@ -128,4 +135,5 @@ If the Performance Rank is detected as Very Poor, a warning will be displayed.
 
 ## Update check / auto update
 
-Thanks to the lovely [blender-addon-updater module by CGCookie](https://github.com/CGCookie/blender-addon-updater), the addon has update checks, versioning and user-enabled Auto-Update. 
+Thanks to the lovely [blender-addon-updater module by CGCookie](https://github.com/CGCookie/blender-addon-updater), the addon has update checks, versioning and user-enabled Auto-Update.  
+In the Preferences panel, you can check for updates and install different releases from this Github repo - if a new version comes out, you'll be able to install it from within Blender!

@@ -9,6 +9,7 @@ class TOPBAR_MT_VV_Rigging(bpy.types.Menu):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
         layout.operator("vv_tools.smooth_rig_xfer")
+        layout.operator("vv_tools.button_attach")
         
 classes = [
     TOPBAR_MT_VV_Rigging,

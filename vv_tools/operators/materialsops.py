@@ -70,6 +70,7 @@ class VVTools_OT_ReloadTexturesOfSelected(Operator):
         return {"FINISHED"}
 
 
+
 # Class list for registration in __init__.py
 classes = [
     VVTools_OT_RemoveUnusedMaterials,

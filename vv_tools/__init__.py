@@ -3,7 +3,7 @@
 bl_info = {
     "name": "VV_Tools",
     "author": "Vianvolaeus",
-    "version": (0, 7, 2), # Texture reload fix
+    "version": (0, 7, 3), # Button Attach operator
     "blender": (2, 80, 0),
     "location": "View3D > Sidebar > VV",
     "description": "General toolkit, mainly for automating short processes.",
@@ -22,7 +22,6 @@ import json
 import math
 import mathutils
 from . import addon_updater_ops
-
 
 from bpy.types import Panel, Operator, PropertyGroup, Object
 from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty, FloatProperty, EnumProperty
@@ -186,15 +185,28 @@ classes = (
 
 def register():
     addon_updater_ops.register(bl_info)  # Keep this at top of register functions as per addon functionality recommendation
-=======
-def register():
-
+    bpy.types.Scene.vv_tools_source_object = bpy.props.PointerProperty(
+        name="Source Object",
+        type=bpy.types.Object,
+        description="Object to transfer vertex weights from",
+    )
 
     for cls in classes:
         bpy.utils.register_class(cls)
+
+    for module in modules:
+        print(f"Registering {module.__name__}")
+        module.register()
+
 
 def unregister():
     addon_updater_ops.unregister()  # Unregister first as per update functionality recommendation
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+
+    for module in reversed(modules):
+        print(f"Unregistering {module.__name__}")
+        module.unregister()
+
     del bpy.types.Scene.vv_tools_source_object
+
