@@ -6,7 +6,6 @@ from bpy.props import StringProperty, PointerProperty, BoolProperty, IntProperty
 
 class VVTools_PT_Rigging(Panel):
     bl_idname = "VV_TOOLS_PT_rigging"
-    bl_idname = "VV_TOOLS_PT_rigging"
     bl_label = "VV Tools - Rigging"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -14,14 +13,16 @@ class VVTools_PT_Rigging(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.mode in {'OBJECT', 'EDIT_ARMATURE', 'POSE'}
+        return context.mode in {'OBJECT', 'EDIT_ARMATURE', 'POSE', 'EDIT_MESH'}
 
     def draw(self, context):
         layout = self.layout
         layout.operator("vv_tools.merge_to_active_bone")
+        layout.operator("vv_tools.button_attach")
         layout.separator()
         box = layout.box()
         box.operator("vv_tools.smooth_rig_xfer")
+
 
 classes = [
     VVTools_PT_Rigging,
