@@ -98,6 +98,7 @@ Mainly useful for clothing, this applies a Data Transfer modifier to transfer ve
 
 Personal use case: Taking unrigged clothing and projecting weights for a rigged body Source Object.
 
+NOTE - This should work for multiple objects at the same time, if required - it is selection based.
 ## Materials
 
 ### Reload Textures of Selected
