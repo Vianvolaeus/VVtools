@@ -139,7 +139,7 @@ class VVTools_OT_SmoothRigXfer(Operator):
             dt_modifier.vert_mapping = 'POLYINTERP_NEAREST'
 
             # Apply the Data Transfer modifier
-            bpy.ops.object.modifier_apply({"object": obj}, modifier=dt_modifier.name)
+            bpy.ops.object.modifier_apply(modifier=dt_modifier.name)
 
             # Parent to the armature
             bpy.ops.object.select_all(action='DESELECT')
