@@ -5,6 +5,10 @@ Addon should be currently be considered experimental, in progress, incomplete.
 
 ![](https://github.com/Vianvolaeus/VVtools/blob/assets/vv_tools_header.jpg)
 
+## Support
+I'm yet to make a cent off of my free, public work, and I'm fairly confident that they've been helpful - if you've got a couple coffee dollars to spare, i'd appreciate it!
+https://ko-fi.com/vianvolaeus
+
 ## Installation
 Download the latest release, install the vv_tools.zip in the add-ons section of your Blender Preferences menu.  
  
