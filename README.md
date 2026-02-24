@@ -67,6 +67,7 @@ New cameras that are added will still be compatible with this function, simply l
 ## Mesh Operators
 
 ### Visual Geo to Shape
+#### WARNING: This operator currently overwrites the initial created shape rather than writing to new ones. 
 
 Takes a Visual Geometry to Mesh snapshot of the selected object and merges it into the active object.  
 This is mainly useful for keeping active modifiers while using them to deform geometry.   
